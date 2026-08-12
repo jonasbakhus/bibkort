@@ -28,7 +28,7 @@ $isStaging = str_starts_with($host, 'testbibkort.');
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="description" content="Se hvilke større arbejdsmarkedsbyer og kommunale jobtal der kan nås i bil fra Bækmarksbro.">
     <?php if ($isStaging): ?><meta name="robots" content="noindex, nofollow, noarchive"><?php endif; ?>
-    <title>Arbejdsmarkedet omkring Bækmarksbro</title>
+    <title>Arbejdsmarkedskort – Bo i Bækmarksbro</title>
     <link rel="preconnect" href="https://unpkg.com">
     <link rel="preconnect" href="https://tile.openstreetmap.org">
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="anonymous">
@@ -52,7 +52,7 @@ $isStaging = str_starts_with($host, 'testbibkort.');
         <aside class="info-panel">
             <header class="hero">
                 <p class="eyebrow">Bo i Bækmarksbro</p>
-                <h1>Hvor langt rækker arbejdsmarkedet?</h1>
+                <h1>Arbejdsmarkedskort</h1>
                 <p class="intro" id="origin-intro">Udforsk større arbejdsmarkedsbyer, der kan nås i bil fra Bækmarksbro.</p>
             </header>
 
