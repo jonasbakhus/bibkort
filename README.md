@@ -1,11 +1,13 @@
 # bibkort
-Første selvstændige version af **Bo i Bækmarksbro**: et analyseværktøj, der viser realistiske køretidsområder og større arbejdsmarkedsbyer omkring Bækmarksbro.
+Første selvstændige version af **Bo i Bækmarksbro**: et analyseværktøj, der viser realistiske køretidsområder og større arbejdsmarkedsbyer fra Bækmarksbro og tre sammenligningspunkter.
 
-Appen er bygget til et almindeligt PHP-webhotel og kræver ingen database, Composer, Node.js eller buildkommando. Alle URL'er er relative, så den kan køre fra eksempelvis `https://landogbyforeningen.dk/bibkort/`.
+Appen er bygget til et almindeligt PHP-webhotel og kræver ingen database, Composer, Node.js eller buildkommando. Alle URL'er er relative, så den kan køre fra eksempelvis `https://bibkort.landogbyforeningen.dk/`.
 
 ## Funktioner
 
 - 15–90 minutters køretidsområde i trin på 5 minutter
+- skift mellem Bækmarksbro, Thyborøn, Lemvig og kommunegrænsen ved Vilhelmsborgvej; Bækmarksbro er standard
+- delbare sammenligninger via URL-parameteren `origin`
 - Valhalla-isochroner baseret på OpenStreetMaps vejnet, ikke simple cirkler
 - faktiske køretider og vejafstande til ni arbejdsmarkedsbyer
 - servercache af både isochroner, køretidsmatrix og Statistikbank-data
@@ -64,19 +66,19 @@ php -l lib/Routing/ValhallaProvider.php
 Med den lokale server på port 8080:
 
 - hovedside: <http://localhost:8080/>
-- køretidsmatrix: <http://localhost:8080/api/routing.php?action=matrix>
-- 45-minutters isochrone: <http://localhost:8080/api/routing.php?action=isochrone&minutes=45>
+- køretidsmatrix: <http://localhost:8080/api/routing.php?action=matrix&origin=baekmarksbro>
+- 45-minutters isochrone: <http://localhost:8080/api/routing.php?action=isochrone&minutes=45&origin=thyboroen>
 - seneste ERHV2-tal: <http://localhost:8080/api/statbank.php>
 
 Et gyldigt API-svar har `"ok": true`. Routing-svar oplyser provider og cachestatus; Statistikbank-svaret oplyser tabel og år.
 
 ## Deployment til Simply.com
 
-1. Klon eller importer repository til `/public_html/bibkort`.
+1. Klon eller importer repository til webroden for `bibkort.landogbyforeningen.dk`.
 2. Vælg PHP 8.0 eller nyere i Simply-kontrolpanelet.
-3. Kontrollér, at webserverens PHP-bruger kan skrive i `/public_html/bibkort/cache`.
-4. Åbn `/bibkort/api/statbank.php` og `/bibkort/api/routing.php?action=matrix` for at varme og kontrollere cachen.
-5. Åbn `/bibkort/`.
+3. Kontrollér, at webserverens PHP-bruger kan skrive i `cache/`.
+4. Åbn `/api/statbank.php` og `/api/routing.php?action=matrix&origin=baekmarksbro` for at varme og kontrollere cachen.
+5. Åbn subdomænets forside.
 
 Der skal ikke køres Composer, npm eller andre buildtrin på serveren. `cache/.htaccess` forhindrer direkte webadgang til cachefiler på Apache-kompatible webhoteller.
 

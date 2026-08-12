@@ -49,7 +49,7 @@ a { color: inherit; }
 .map-region { grid-area: map; position: relative; min-width: 0; }
 #map { width: 100%; height: 100%; background: #dfe8e5; }
 
-.hero { padding-bottom: 24px; }
+.hero { padding-bottom: 20px; }
 .eyebrow, .section-kicker {
     margin: 0 0 7px;
     color: var(--accent);
@@ -68,6 +68,35 @@ h1 {
 }
 
 .intro { margin: 13px 0 0; color: var(--ink-soft); max-width: 350px; }
+
+.origin-control { margin: 0 0 18px; }
+.origin-options {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 7px;
+}
+.origin-option {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    justify-content: center;
+    gap: 1px;
+    min-width: 0;
+    padding: 9px 11px;
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    background: #fff;
+    color: var(--ink);
+    text-align: left;
+    cursor: pointer;
+    transition: border-color 140ms ease, background 140ms ease, color 140ms ease;
+}
+.origin-option:hover { border-color: #9dbbb5; background: #f7fbfa; }
+.origin-option:focus-visible { outline: 3px solid rgb(15 118 110 / 22%); outline-offset: 2px; }
+.origin-option[aria-pressed="true"] { border-color: var(--accent); background: var(--accent); color: #fff; }
+.origin-option strong { overflow: hidden; font-size: 0.75rem; text-overflow: ellipsis; white-space: nowrap; }
+.origin-option small { color: var(--ink-soft); font-size: 0.61rem; }
+.origin-option[aria-pressed="true"] small { color: #d6eeea; }
 
 .time-control {
     margin: 0 -8px;
@@ -217,7 +246,7 @@ h1 {
     font-size: 0.68rem;
     backdrop-filter: blur(8px);
 }
-.map-legend span { display: flex; align-items: center; gap: 6px; }
+.map-legend > span { display: flex; align-items: center; gap: 6px; }
 .legend-dot { width: 9px; height: 9px; border-radius: 50%; background: var(--accent); }
 .origin-dot { background: #e3553f; box-shadow: 0 0 0 2px rgb(227 85 63 / 20%); }
 .near-dot { background: var(--near); }

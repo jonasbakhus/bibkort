@@ -11,28 +11,35 @@ $config = require __DIR__ . '/../config/app.php';
 $provider = new ValhallaProvider($config['routing']['base_url']);
 $action = $_GET['action'] ?? '';
 $ttl = (int) $config['routing']['cache_ttl'];
+$originId = is_string($_GET['origin'] ?? null) ? $_GET['origin'] : $config['default_origin'];
+
+if (!isset($config['origins'][$originId])) {
+    app_json_response(['ok' => false, 'error' => 'Ukendt udgangspunkt.'], 422);
+}
+
+$origin = $config['origins'][$originId];
 
 try {
     if ($action === 'matrix') {
-        $cacheKey = 'routing-matrix-' . sha1(json_encode([$config['origin'], $config['cities'], $provider->name()]));
+        $cacheKey = 'routing-matrix-' . sha1(json_encode([$origin, $config['cities'], $provider->name()]));
         $cached = app_cache_read($cacheKey, $ttl);
         if ($cached !== null) {
             app_json_response([
                 'ok' => true,
                 'provider' => $provider->name(),
-                'origin' => $config['origin'],
+                'origin' => $origin,
                 'cities' => $cached['data'],
                 'cache' => ['hit' => true, 'stale' => false, 'ageSeconds' => $cached['age']],
             ]);
         }
 
         try {
-            $cities = $provider->matrix($config['origin'], $config['cities']);
+            $cities = $provider->matrix($origin, $config['cities']);
             app_cache_write($cacheKey, $cities);
             app_json_response([
                 'ok' => true,
                 'provider' => $provider->name(),
-                'origin' => $config['origin'],
+                'origin' => $origin,
                 'cities' => $cities,
                 'cache' => ['hit' => false, 'stale' => false, 'ageSeconds' => 0],
             ]);
@@ -42,7 +49,7 @@ try {
                 app_json_response([
                     'ok' => true,
                     'provider' => $provider->name(),
-                    'origin' => $config['origin'],
+                    'origin' => $origin,
                     'cities' => $stale['data'],
                     'warning' => 'Routingtjenesten kunne ikke nås; senest gemte køretider vises.',
                     'cache' => ['hit' => true, 'stale' => true, 'ageSeconds' => $stale['age']],
@@ -59,7 +66,7 @@ try {
             app_json_response(['ok' => false, 'error' => 'minutes skal være 15–90 i trin på 5.'], 422);
         }
 
-        $cacheKey = 'routing-isochrone-' . sha1(json_encode([$config['origin'], $minutes, $provider->name()]));
+        $cacheKey = 'routing-isochrone-' . sha1(json_encode([$origin, $minutes, $provider->name()]));
         $cached = app_cache_read($cacheKey, $ttl);
         if ($cached !== null) {
             app_json_response([
@@ -72,7 +79,7 @@ try {
         }
 
         try {
-            $geojson = $provider->isochrone($config['origin'], $minutes);
+            $geojson = $provider->isochrone($origin, $minutes);
             app_cache_write($cacheKey, $geojson);
             app_json_response([
                 'ok' => true,

@@ -5,7 +5,8 @@ declare(strict_types=1);
 $config = require __DIR__ . '/config/app.php';
 $clientConfig = [
     'name' => $config['name'],
-    'origin' => $config['origin'],
+    'defaultOrigin' => $config['default_origin'],
+    'origins' => $config['origins'],
     'slider' => $config['slider'],
     'cities' => $config['cities'],
     'endpoints' => [
@@ -13,6 +14,10 @@ $clientConfig = [
         'statbank' => 'api/statbank.php',
     ],
 ];
+$assetVersion = max(
+    (int) filemtime(__DIR__ . '/assets/css/app.css'),
+    (int) filemtime(__DIR__ . '/assets/js/app.js')
+);
 ?>
 <!doctype html>
 <html lang="da">
@@ -24,17 +29,17 @@ $clientConfig = [
     <link rel="preconnect" href="https://unpkg.com">
     <link rel="preconnect" href="https://tile.openstreetmap.org">
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="anonymous">
-    <link rel="stylesheet" href="assets/css/app.css">
+    <link rel="stylesheet" href="assets/css/app.css?v=<?= $assetVersion ?>">
     <script id="app-config" type="application/json"><?= json_encode($clientConfig, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP) ?></script>
     <script defer src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin="anonymous"></script>
-    <script defer src="assets/js/app.js"></script>
+    <script defer src="assets/js/app.js?v=<?= $assetVersion ?>"></script>
 </head>
 <body>
     <main class="app-shell">
         <section class="map-region" aria-label="Kort over køretidsområdet">
             <div id="map"></div>
             <div class="map-legend" aria-hidden="true">
-                <span><i class="legend-dot origin-dot"></i>Bækmarksbro</span>
+                <span><i class="legend-dot origin-dot"></i><span id="legend-origin">Bækmarksbro</span></span>
                 <span><i class="legend-dot reached-dot"></i>Nået by</span>
                 <span><i class="legend-dot near-dot"></i>Nær grænsen</span>
             </div>
@@ -45,8 +50,25 @@ $clientConfig = [
             <header class="hero">
                 <p class="eyebrow">Bo i Bækmarksbro</p>
                 <h1>Hvor langt rækker arbejdsmarkedet?</h1>
-                <p class="intro">Udforsk større arbejdsmarkedsbyer, der kan nås i bil fra Bækmarksbro.</p>
+                <p class="intro" id="origin-intro">Udforsk større arbejdsmarkedsbyer, der kan nås i bil fra Bækmarksbro.</p>
             </header>
+
+            <section class="origin-control" aria-labelledby="origin-title">
+                <p class="section-kicker" id="origin-title">Sammenlign udgangspunkt</p>
+                <div class="origin-options" role="group" aria-labelledby="origin-title">
+                    <?php foreach ($config['origins'] as $id => $origin): ?>
+                        <button
+                            class="origin-option"
+                            type="button"
+                            data-origin-id="<?= htmlspecialchars($id, ENT_QUOTES, 'UTF-8') ?>"
+                            aria-pressed="<?= $id === $config['default_origin'] ? 'true' : 'false' ?>"
+                        >
+                            <strong><?= htmlspecialchars($origin['name'], ENT_QUOTES, 'UTF-8') ?></strong>
+                            <small><?= htmlspecialchars($origin['description'], ENT_QUOTES, 'UTF-8') ?></small>
+                        </button>
+                    <?php endforeach; ?>
+                </div>
+            </section>
 
             <section class="time-control" aria-labelledby="time-title">
                 <div class="control-heading">
@@ -93,7 +115,7 @@ $clientConfig = [
             <section class="panel-section" aria-labelledby="cities-title">
                 <div class="section-heading">
                     <h2 id="cities-title">Byer efter køretid</h2>
-                    <span>fra Bækmarksbro</span>
+                    <span>fra <span id="cities-origin">Bækmarksbro</span></span>
                 </div>
                 <div id="city-list" class="city-list"><p class="empty-state">Beregner ruter…</p></div>
             </section>

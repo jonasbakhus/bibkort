@@ -7,7 +7,11 @@
     }
 
     const config = JSON.parse(configElement.textContent);
+    const requestedOrigin = new URLSearchParams(window.location.search).get('origin');
+    const initialOriginId = Object.hasOwn(config.origins, requestedOrigin) ? requestedOrigin : config.defaultOrigin;
     const state = {
+        originId: initialOriginId,
+        origin: config.origins[initialOriginId],
         minutes: config.slider.default,
         cities: config.cities.map((city) => ({ ...city, travelSeconds: null, distanceKm: null })),
         municipalities: {},
@@ -19,6 +23,7 @@
         markers: new Map(),
         isochroneLayer: null,
         isochroneRequest: 0,
+        routingRequest: 0,
     };
 
     const elements = {
@@ -34,6 +39,10 @@
         branches: document.getElementById('branch-chart'),
         cityList: document.getElementById('city-list'),
         mapLoading: document.getElementById('map-loading'),
+        originIntro: document.getElementById('origin-intro'),
+        legendOrigin: document.getElementById('legend-origin'),
+        citiesOrigin: document.getElementById('cities-origin'),
+        originOptions: [...document.querySelectorAll('[data-origin-id]')],
     };
 
     const numberFormat = new Intl.NumberFormat('da-DK');
@@ -53,15 +62,12 @@
         attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
     }).addTo(map);
 
-    const originIcon = L.divIcon({
-        className: 'origin-marker-wrap',
-        html: '<span class="origin-pulse"></span><span class="origin-marker"></span><span class="origin-label">Bækmarksbro</span>',
-        iconSize: [18, 18],
-        iconAnchor: [9, 9],
-    });
-    L.marker([config.origin.lat, config.origin.lon], { icon: originIcon, zIndexOffset: 1000 })
+    const originMarker = L.marker([state.origin.lat, state.origin.lon], {
+        icon: originIcon(state.origin.name),
+        zIndexOffset: 1000,
+    })
         .addTo(map)
-        .bindPopup('<strong>Bækmarksbro</strong><br>Udgangspunkt for alle køretider.');
+        .bindPopup(originPopup(state.origin));
 
     config.cities.forEach((city) => {
         const marker = L.circleMarker([city.lat, city.lon], markerStyle('muted', 0));
@@ -76,16 +82,17 @@
         state.markers.set(city.id, marker);
     });
 
-    const bounds = L.latLngBounds(
-        [[config.origin.lat, config.origin.lon], ...config.cities.map((city) => [city.lat, city.lon])]
-    );
-    map.fitBounds(bounds.pad(0.08), { padding: [30, 30] });
+    fitMapToOrigin();
 
     elements.slider.min = config.slider.min;
     elements.slider.max = config.slider.max;
     elements.slider.step = config.slider.step;
     elements.slider.value = state.minutes;
     updateSliderProgress();
+
+    elements.originOptions.forEach((button) => {
+        button.addEventListener('click', () => selectOrigin(button.dataset.originId));
+    });
 
     let isochroneTimer = null;
     elements.slider.addEventListener('input', () => {
@@ -96,16 +103,57 @@
         isochroneTimer = window.setTimeout(() => loadIsochrone(state.minutes), 220);
     });
 
-    Promise.allSettled([loadRouting(), loadStatistics()]).finally(() => render());
-    loadIsochrone(state.minutes);
+    Promise.allSettled([loadRouting(state.originId), loadStatistics()]).finally(() => render());
+    loadIsochrone(state.minutes, state.originId);
 
-    async function loadRouting() {
+    function selectOrigin(originId) {
+        if (!Object.hasOwn(config.origins, originId) || originId === state.originId) {
+            return;
+        }
+
+        state.originId = originId;
+        state.origin = config.origins[originId];
+        state.cities = config.cities.map((city) => ({ ...city, travelSeconds: null, distanceKm: null }));
+        state.routingReady = false;
+        state.routeError = null;
+        state.routingRequest += 1;
+        state.isochroneRequest += 1;
+        window.clearTimeout(isochroneTimer);
+
+        if (state.isochroneLayer) {
+            map.removeLayer(state.isochroneLayer);
+            state.isochroneLayer = null;
+        }
+
+        originMarker
+            .setLatLng([state.origin.lat, state.origin.lon])
+            .setIcon(originIcon(state.origin.name))
+            .setPopupContent(originPopup(state.origin));
+
+        const url = new URL(window.location.href);
+        if (originId === config.defaultOrigin) {
+            url.searchParams.delete('origin');
+        } else {
+            url.searchParams.set('origin', originId);
+        }
+        window.history.replaceState({}, '', url);
+
+        fitMapToOrigin();
+        render();
+        loadRouting(originId);
+        loadIsochrone(state.minutes, originId);
+    }
+
+    async function loadRouting(originId) {
+        const requestId = ++state.routingRequest;
         try {
-            const response = await fetchJson(`${config.endpoints.routing}?action=matrix`);
+            const response = await fetchJson(`${config.endpoints.routing}?action=matrix&origin=${encodeURIComponent(originId)}`);
+            if (requestId !== state.routingRequest) return;
             state.cities = response.cities;
             state.routingReady = true;
             state.routeError = response.warning || null;
         } catch (error) {
+            if (requestId !== state.routingRequest) return;
             state.routeError = error.message;
         }
         render();
@@ -124,13 +172,13 @@
         render();
     }
 
-    async function loadIsochrone(minutes) {
+    async function loadIsochrone(minutes, originId = state.originId) {
         const requestId = ++state.isochroneRequest;
         elements.mapLoading.textContent = `Beregner ${minutes}-minutters område…`;
         elements.mapLoading.classList.remove('is-hidden', 'is-error');
 
         try {
-            const response = await fetchJson(`${config.endpoints.routing}?action=isochrone&minutes=${minutes}`);
+            const response = await fetchJson(`${config.endpoints.routing}?action=isochrone&minutes=${minutes}&origin=${encodeURIComponent(originId)}`);
             if (requestId !== state.isochroneRequest) {
                 return;
             }
@@ -174,6 +222,12 @@
     function render() {
         elements.output.value = `${state.minutes} minutter`;
         elements.output.textContent = `${state.minutes} minutter`;
+        elements.originIntro.textContent = `Udforsk større arbejdsmarkedsbyer, der kan nås i bil fra ${state.origin.name}.`;
+        elements.legendOrigin.textContent = state.origin.name;
+        elements.citiesOrigin.textContent = state.origin.name;
+        elements.originOptions.forEach((button) => {
+            button.setAttribute('aria-pressed', String(button.dataset.originId === state.originId));
+        });
 
         const reachedCities = state.routingReady
             ? state.cities.filter((city) => city.travelSeconds !== null && city.travelSeconds <= state.minutes * 60)
@@ -350,6 +404,26 @@
     function updateSliderProgress() {
         const progress = ((state.minutes - config.slider.min) / (config.slider.max - config.slider.min)) * 100;
         elements.slider.style.setProperty('--progress', `${progress}%`);
+    }
+
+    function originIcon(name) {
+        return L.divIcon({
+            className: 'origin-marker-wrap',
+            html: `<span class="origin-pulse"></span><span class="origin-marker"></span><span class="origin-label">${escapeHtml(name)}</span>`,
+            iconSize: [18, 18],
+            iconAnchor: [9, 9],
+        });
+    }
+
+    function originPopup(origin) {
+        return `<strong>${escapeHtml(origin.name)}</strong><br>Valgt udgangspunkt for køretiderne.`;
+    }
+
+    function fitMapToOrigin() {
+        const bounds = L.latLngBounds(
+            [[state.origin.lat, state.origin.lon], ...config.cities.map((city) => [city.lat, city.lon])]
+        );
+        map.fitBounds(bounds.pad(0.08), { padding: [30, 30] });
     }
 
     function formatMinutes(seconds) {

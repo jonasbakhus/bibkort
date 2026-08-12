@@ -4,10 +4,36 @@ declare(strict_types=1);
 
 return [
     'name' => 'Bo i Bækmarksbro – arbejdsmarkedskort',
-    'origin' => [
-        'name' => 'Bækmarksbro',
-        'lat' => 56.41647,
-        'lon' => 8.30842,
+    'default_origin' => 'baekmarksbro',
+    'origins' => [
+        'baekmarksbro' => [
+            'id' => 'baekmarksbro',
+            'name' => 'Bækmarksbro',
+            'description' => 'Primær',
+            'lat' => 56.41647,
+            'lon' => 8.30842,
+        ],
+        'thyboroen' => [
+            'id' => 'thyboroen',
+            'name' => 'Thyborøn',
+            'description' => 'Nord',
+            'lat' => 56.7038,
+            'lon' => 8.2127,
+        ],
+        'lemvig' => [
+            'id' => 'lemvig',
+            'name' => 'Lemvig',
+            'description' => 'Byen',
+            'lat' => 56.5484,
+            'lon' => 8.3102,
+        ],
+        'vilhelmsborgvej' => [
+            'id' => 'vilhelmsborgvej',
+            'name' => 'Vilhelmsborgvej',
+            'description' => 'Kommunegrænsen',
+            'lat' => 56.4292803589424,
+            'lon' => 8.409031699370793,
+        ],
     ],
     'slider' => [
         'min' => 15,
