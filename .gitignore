@@ -1,0 +1,11 @@
+# Genererede cachefiler
+/cache/*
+!/cache/.gitkeep
+!/cache/.htaccess
+
+# Lokale indstillinger og værktøjer
+.env
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
