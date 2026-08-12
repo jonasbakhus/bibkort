@@ -9,7 +9,7 @@ Appen er bygget til et almindeligt PHP-webhotel og kræver ingen database, Compo
 - skift mellem Bækmarksbro, Thyborøn, Lemvig og kommunegrænsen ved Vilhelmsborgvej; Bækmarksbro er standard
 - delbare sammenligninger via URL-parameteren `origin`
 - Valhalla-isochroner baseret på OpenStreetMaps vejnet, ikke simple cirkler
-- faktiske køretider og vejafstande til ni arbejdsmarkedsbyer
+- faktiske køretider og vejafstande til 14 arbejdsmarkedsbyer
 - servercache af både isochroner, køretidsmatrix og Statistikbank-data
 - seneste tilgængelige ERHV2-år findes automatisk
 - job, arbejdssteder og branchefordeling for nåede kommuner uden dobbeltoptælling
@@ -93,7 +93,9 @@ Der skal ikke køres Composer, npm eller andre buildtrin på serveren. `cache/.h
 
 Isochronen er en modelberegning på vejnettet. Resultatet afhænger af routingproviderens kortdata og kørselsmodel og er ikke en garanti for en bestemt rejsetid. Første version bruger ikke afgangstid eller live trafik.
 
-ERHV2 indeholder kommuneoplysninger, ikke præcise by- eller polygondata. En kommunes job og arbejdssteder medregnes, når den viste hovedby kan nås inden for sliderens tid. Derfor beskrives resultatet som **job i kommuner, hvis hovedby kan nås** – ikke som job inden for selve køretidspolygonen. En kommune tælles højst én gang.
+ERHV2 indeholder kommuneoplysninger, ikke præcise by- eller polygondata. En kommunes job og arbejdssteder medregnes, når mindst én af de viste byer i kommunen kan nås inden for sliderens tid. Det omfatter også arbejdssteder i landzoner, men de kan ligge uden for selve køretidspolygonen. Derfor beskrives resultatet som **job i nåede kommuner** – ikke som job inden for selve køretidspolygonen. En kommune tælles højst én gang.
+
+Se [DEPLOYMENT.md](DEPLOYMENT.md) for branch-, test- og produktionsflow.
 
 Den offentlige Valhalla-instans er en ekstern fællestjeneste uden oppetidsgaranti. Servercachen mindsker belastningen og kan levere senest gemte svar ved midlertidige udfald. Til en senere højtrafikversion bør en driftet routinginstans med aftalt kapacitet overvejes.
 

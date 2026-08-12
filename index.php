@@ -18,6 +18,8 @@ $assetVersion = max(
     (int) filemtime(__DIR__ . '/assets/css/app.css'),
     (int) filemtime(__DIR__ . '/assets/js/app.js')
 );
+$host = strtolower((string) ($_SERVER['HTTP_HOST'] ?? ''));
+$isStaging = str_starts_with($host, 'testbibkort.');
 ?>
 <!doctype html>
 <html lang="da">
@@ -25,6 +27,7 @@ $assetVersion = max(
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="description" content="Se hvilke større arbejdsmarkedsbyer og kommunale jobtal der kan nås i bil fra Bækmarksbro.">
+    <?php if ($isStaging): ?><meta name="robots" content="noindex, nofollow, noarchive"><?php endif; ?>
     <title>Arbejdsmarkedet omkring Bækmarksbro</title>
     <link rel="preconnect" href="https://unpkg.com">
     <link rel="preconnect" href="https://tile.openstreetmap.org">
@@ -123,7 +126,7 @@ $assetVersion = max(
             <section class="method-note" aria-labelledby="method-title">
                 <h2 id="method-title">Om tallene</h2>
                 <p>Køretidsfladen følger vejnettet og viser det omtrentlige geografiske område, der kan nås inden for den valgte tid.</p>
-                <p>Job og arbejdssteder er derimod kommunetal fra ERHV2. En kommunes tal medregnes, når den viste hovedby kan nås. Det er en arbejdsmarkedsindikator – ikke en optælling af job inde i polygonen. Hver kommune tælles kun én gang.</p>
+                <p>Job og arbejdssteder er kommunetal fra ERHV2. En kommunes tal medregnes, når mindst én af de viste byer i kommunen kan nås. Det omfatter også arbejdssteder i landzoner, men de kan ligge uden for selve køretidspolygonen. Hver kommune tælles kun én gang.</p>
             </section>
 
             <footer class="sources">
