@@ -5,7 +5,7 @@ Projektet bruger to permanente grene og to subdomæner:
 | Gren | Miljø | Webrod |
 | --- | --- | --- |
 | `develop` | `testbibkort.landogbyforeningen.dk` | `~/testbibkort` |
-| `develop` (Google-variant) | `testbibg.landogbyforeningen.dk` | `~/testbibg` |
+| `google` | `testbibg.landogbyforeningen.dk` | `~/testbibg` |
 | `main` | `bibkort.landogbyforeningen.dk` | `~/bibkort` |
 
 ## Dagligt arbejde
@@ -19,7 +19,7 @@ Begge testmiljøer får automatisk `noindex`.
 
 ## Google-testmiljø
 
-`scripts/deploy-google-test.sh` udgiver samme `develop`-commit til `~/testbibg`. Miljøets egen `config/secrets.php` skal indeholde:
+`scripts/deploy-google-test.sh` udgiver `google`-grenen til `~/testbibg`. Miljøets egen `config/secrets.php` skal indeholde:
 
 ```php
 'variant' => 'google',
@@ -35,6 +35,17 @@ Cronjobbet er:
 ```cron
 * * * * * /usr/bin/flock -n $HOME/.bibkort-google-test-deploy.lock $HOME/testbibg/scripts/deploy-google-test.sh >> $HOME/.bibkort-google-test-deploy.log 2>&1
 ```
+
+Fælles rettelser udvikles på `develop` og føres over, når Google-udgaven skal opdateres:
+
+```bash
+git switch google
+git merge develop
+git push origin google
+git switch develop
+```
+
+Google-specifikke ændringer committes direkte på `google` og påvirker dermed ikke `develop` eller `main`.
 
 ## Automatisk deploy til test
 

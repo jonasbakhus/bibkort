@@ -4,7 +4,7 @@ set -Eeuo pipefail
 
 repository="https://github.com/jonasbakhus/bibkort.git"
 archive_base="https://github.com/jonasbakhus/bibkort/archive"
-branch="develop"
+branch="google"
 target="$HOME/testbibg"
 state_file="$HOME/.bibkort-google-test-deployed"
 auth_file="$HOME/.testbibg-health-auth"
