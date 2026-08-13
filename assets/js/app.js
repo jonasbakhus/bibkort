@@ -5,6 +5,7 @@
     if (!configElement || typeof L === 'undefined') return;
 
     const config = JSON.parse(configElement.textContent);
+    const CITY_LABEL_MIN_ZOOM = 11;
     const params = new URLSearchParams(window.location.search);
     const primaryId = validOrigin(params.get('origin')) ? params.get('origin') : null;
     let secondaryId = primaryId && validOrigin(params.get('compare')) ? params.get('compare') : null;
@@ -105,6 +106,13 @@
     config.cities.forEach((city) => {
         const marker = L.circleMarker([city.lat, city.lon], markerStyle('muted', 0)).addTo(map);
         marker.bindPopup(cityPopup(city));
+        marker.bindTooltip(city.name, {
+            className: 'city-name-label',
+            direction: 'top',
+            offset: [0, -7],
+            opacity: 0.92,
+            interactive: false,
+        });
         state.markers.set(city.id, marker);
         if (city.municipalityCode === '665' && validOrigin(city.id)) {
             const touchMarker = L.marker([city.lat, city.lon], {
@@ -133,6 +141,8 @@
         state.boundaryMarkers.set(origin.id, marker);
         state.boundaryTouchMarkers.set(origin.id, touchMarker);
     });
+    map.on('zoomend', updateCityLabels);
+    updateCityLabels();
     map.on('popupopen', ({ popup }) => {
         popup.getElement()?.querySelectorAll('[data-select-origin]').forEach((button) => {
             button.addEventListener('click', () => {
@@ -911,6 +921,22 @@
             const origin = config.origins[originId];
             marker.setPopupContent(boundaryPointPopup(origin));
             state.boundaryTouchMarkers.get(originId)?.setPopupContent(boundaryPointPopup(origin));
+        });
+        updateCityLabels();
+    }
+
+    function updateCityLabels() {
+        const showLabels = map.getZoom() >= CITY_LABEL_MIN_ZOOM;
+        const selectedIds = new Set([
+            state.scenarios.primary.originId,
+            state.comparing ? state.scenarios.secondary.originId : null,
+        ].filter(Boolean));
+        state.markers.forEach((marker, cityId) => {
+            if (showLabels && !selectedIds.has(cityId)) {
+                if (!marker.isTooltipOpen()) marker.openTooltip();
+            } else if (marker.isTooltipOpen()) {
+                marker.closeTooltip();
+            }
         });
     }
 

@@ -52,6 +52,7 @@ a { color: inherit; }
 
 .map-region { grid-area: map; position: relative; min-width: 0; }
 #map { width: 100%; height: 100%; background: #dfe8e5; }
+#map .leaflet-tile-pane { filter: grayscale(.78) saturate(.32) brightness(1.045) contrast(.9); }
 .map-mobile-controls { display: none; }
 .map-expanded-time-control { display: none; }
 
@@ -442,6 +443,19 @@ body.is-map-expanded .map-expanded-time-control .range-labels { margin-top: -2px
 .city-popup-actions button:last-child:not(:first-child) { border-color: var(--compare); background: var(--compare); }
 .city-popup-actions button:hover, .city-popup-actions button:focus-visible { filter: brightness(.92); outline: 2px solid #fff; outline-offset: -3px; }
 .city-touch-target { border-radius: 50%; background: transparent; }
+.leaflet-tooltip.city-name-label {
+    padding: 2px 5px;
+    border: 1px solid rgb(92 104 108 / 24%);
+    border-radius: 4px;
+    background: rgb(250 251 249 / 88%);
+    box-shadow: none;
+    color: #566267;
+    font-size: 9px;
+    font-weight: 650;
+    line-height: 1.15;
+    white-space: nowrap;
+}
+.leaflet-tooltip-top.city-name-label::before { border-top-color: rgb(92 104 108 / 24%); }
 .leaflet-control-attribution { font-size: 9px; }
 .google-maps-attribution { color: #5e5e5e; font-size: 12px; font-style: normal; font-weight: 400; letter-spacing: normal; white-space: nowrap; }
 
