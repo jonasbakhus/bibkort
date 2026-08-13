@@ -23,14 +23,20 @@ $clientConfig = [
         'boundary' => 'api/boundary.php',
     ],
 ];
-$assetVersion = max(
-    (int) filemtime(__DIR__ . '/assets/css/app.css'),
-    (int) filemtime(__DIR__ . '/assets/js/app.js'),
-    (int) filemtime(__DIR__ . '/assets/brand/land-og-by-logo.svg')
-);
+$assetFiles = [
+    __DIR__ . '/assets/css/app.css',
+    __DIR__ . '/assets/js/app.js',
+    __DIR__ . '/assets/brand/land-og-by-logo.svg',
+];
+$assetVersion = substr(hash('sha256', implode('|', array_map(
+    static fn (string $file): string => (string) hash_file('sha256', $file),
+    $assetFiles
+))), 0, 12);
 $host = strtolower((string) ($_SERVER['HTTP_HOST'] ?? ''));
 $isStaging = str_starts_with($host, 'testbibkort.') || str_starts_with($host, 'testbibg.');
 $isGoogle = $config['variant'] === 'google';
+header('Cache-Control: no-cache, must-revalidate');
+header('Pragma: no-cache');
 ?>
 <!doctype html>
 <html lang="da">
