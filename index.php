@@ -63,6 +63,7 @@ $isGoogle = $config['variant'] === 'google';
                 <span><i class="legend-dot reached-dot"></i>Nået by</span>
                 <span><i class="legend-dot near-dot"></i>Nær grænsen</span>
                 <span><i class="legend-line municipality-line"></i>Lemvig Kommune</span>
+                <span><i class="legend-line context-municipality-line"></i>Andre kommuner</span>
             </div>
             <div id="map-loading" class="map-loading is-prompt" role="status">Vælg en by for at starte</div>
         </section>
@@ -127,6 +128,7 @@ $isGoogle = $config['variant'] === 'google';
                         <article class="metric-card"><span class="metric-label">A · Største nåede by</span><strong id="metric-largest" class="metric-name">—</strong></article>
                     </section>
                     <details class="sub-fold" open><summary>Største brancher <span>anslåede job</span></summary><div id="branch-chart" class="branch-chart"><p class="empty-state">Venter på jobtal…</p></div></details>
+                    <details class="sub-fold"><summary>Kommuner i zonen <span>by / land</span></summary><div id="municipality-breakdown" class="municipality-breakdown"><p class="empty-state">Venter på kommunetal…</p></div></details>
                 </div>
             </details>
 
@@ -142,9 +144,11 @@ $isGoogle = $config['variant'] === 'google';
                                 <div><span><?= $label ?> · Byer nået</span><strong id="compare-<?= $key ?>-cities">—</strong></div>
                             </div>
                             <h3><?= $label ?> · Største brancher</h3><div id="compare-<?= $key ?>-branches" class="branch-chart"><p class="empty-state">Vælg by…</p></div>
+                            <details class="comparison-municipality-fold"><summary><?= $label ?> · Kommuner i zonen <span>by / land</span></summary><div id="compare-<?= $key ?>-municipalities" class="municipality-breakdown"><p class="empty-state">Vælg by…</p></div></details>
                         </article>
                     <?php endforeach; ?>
                 </section>
+                <div id="comparison-branches-compact" class="comparison-branches-compact" aria-label="Sammenligning af brancher"></div>
             </details>
 
             <details id="cities-section" class="fold-card" hidden open>

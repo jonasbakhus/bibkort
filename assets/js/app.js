@@ -23,7 +23,9 @@
         settlementsByMunicipality: new Map(),
         municipalityBoundaries: new Map(),
         markers: new Map(),
+        touchMarkers: new Map(),
         municipalityLayer: null,
+        contextMunicipalityLayer: null,
         supportingDataStarted: false,
         mobileDisclosureApplied: false,
         scenarios: {
@@ -43,6 +45,7 @@
         largest: document.getElementById('metric-largest'),
         year: document.getElementById('metric-year'),
         branches: document.getElementById('branch-chart'),
+        municipalityBreakdown: document.getElementById('municipality-breakdown'),
         cityList: document.getElementById('city-list'),
         mapLoading: document.getElementById('map-loading'),
         originIntro: document.getElementById('origin-intro'),
@@ -61,6 +64,7 @@
         selectionPrompt: document.getElementById('selection-prompt'),
         singleOriginName: document.getElementById('single-origin-name'),
         mapSizeToggle: document.getElementById('map-size-toggle'),
+        comparisonBranchesCompact: document.getElementById('comparison-branches-compact'),
         compare: {
             primary: comparisonElements('primary'),
             secondary: comparisonElements('secondary'),
@@ -78,9 +82,11 @@
     L.control.zoom({ position: 'topright' }).addTo(map);
     map.createPane('isochrone-primary');
     map.createPane('isochrone-secondary');
+    map.createPane('municipality-context');
     map.createPane('municipality-boundary');
     map.getPane('isochrone-primary').style.zIndex = 350;
     map.getPane('isochrone-secondary').style.zIndex = 351;
+    map.getPane('municipality-context').style.zIndex = 340;
     map.getPane('municipality-boundary').style.zIndex = 360;
 
     L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
@@ -96,6 +102,15 @@
         const marker = L.circleMarker([city.lat, city.lon], markerStyle('muted', 0)).addTo(map);
         marker.bindPopup(cityPopup(city));
         state.markers.set(city.id, marker);
+        if (city.municipalityCode === '665' && validOrigin(city.id)) {
+            const touchMarker = L.marker([city.lat, city.lon], {
+                icon: L.divIcon({ className: 'city-touch-target', iconSize: [36, 36], iconAnchor: [18, 18] }),
+                keyboard: true,
+                title: city.name,
+                alt: city.name,
+            }).addTo(map).bindPopup(cityPopup(city));
+            state.touchMarkers.set(city.id, touchMarker);
+        }
     });
     map.on('popupopen', ({ popup }) => {
         popup.getElement()?.querySelectorAll('[data-select-origin]').forEach((button) => {
@@ -149,9 +164,6 @@
             scenario.isochroneRequest += 1;
             scenario.isochroneLoading = true;
             scenario.isochroneError = null;
-            scenario.geojson = null;
-            scenario.zoneMinutes = null;
-            removeScenarioLayer(scenario);
             invalidateAnalysis(scenario);
         });
         render();
@@ -209,6 +221,7 @@
             workplaces: document.getElementById(`compare-${key}-workplaces`),
             cities: document.getElementById(`compare-${key}-cities`),
             branches: document.getElementById(`compare-${key}-branches`),
+            municipalities: document.getElementById(`compare-${key}-municipalities`),
         };
     }
 
@@ -347,6 +360,7 @@
             const response = await fetchJson(config.endpoints.geography);
             state.geography = response;
             indexGeography(response);
+            renderContextMunicipalityBoundaries(response);
             state.geographyReady = true;
             state.geographyError = response.warning || null;
             queueActiveAnalyses();
@@ -354,6 +368,17 @@
             state.geographyError = error.message;
         }
         render();
+    }
+
+    function renderContextMunicipalityBoundaries(geography) {
+        if (state.contextMunicipalityLayer) map.removeLayer(state.contextMunicipalityLayer);
+        const features = (geography.municipalities?.features || [])
+            .filter((feature) => String(feature.properties?.code) !== '665');
+        state.contextMunicipalityLayer = L.geoJSON({ type: 'FeatureCollection', features }, {
+            pane: 'municipality-context',
+            interactive: false,
+            style: { color: '#526d7a', weight: 1.35, opacity: 0.72, fill: false, dashArray: '4 5', lineCap: 'round' },
+        }).addTo(map);
     }
 
     async function loadIsochrone(scenario, requestedMinutes = state.minutes) {
@@ -455,7 +480,7 @@
     }
 
     function calculateScenario(scenario) {
-        if (!scenario.origin) return { ready: false, selected: false, error: null, reachedCities: [], jobs: null, workplaces: null, largest: null, branches: [], coverage: {} };
+        if (!scenario.origin) return { ready: false, selected: false, error: null, reachedCities: [], jobs: null, workplaces: null, largest: null, branches: [], municipalityBreakdown: [], coverage: {} };
         const reachedCities = scenario.routingReady
             ? scenario.cities.filter((city) => config.reachability === 'zone' && scenario.geojson
                 ? pointInZone(city.lon, city.lat, scenario.geojson)
@@ -466,7 +491,7 @@
             && scenario.analysis;
         const calculationError = state.statsError || state.geographyError || (!scenario.routingReady ? scenario.routeError : null) || scenario.isochroneError || scenario.analysisError;
         if (!analysisCurrent || !scenario.routingReady) {
-            return { ready: false, error: calculationError, reachedCities, jobs: null, workplaces: null, largest: null, branches: [], coverage: {} };
+            return { ready: false, error: calculationError, reachedCities, jobs: null, workplaces: null, largest: null, branches: [], municipalityBreakdown: [], coverage: {} };
         }
         const largest = [...reachedCities]
             .sort((a, b) => estimatedCityJobs(b, scenario.analysis.coverage) - estimatedCityJobs(a, scenario.analysis.coverage))[0] || null;
@@ -476,6 +501,7 @@
     function calculateZoneMetrics(scenario) {
         const coverage = {};
         const branchTotals = new Map();
+        const municipalityBreakdown = [];
         let jobs = 0;
         let workplaces = 0;
         let hasJobs = false;
@@ -489,12 +515,29 @@
                 .reduce((sum, settlement) => sum + settlement.population, 0);
             const urbanCoverage = totalPopulation > 0 ? coveredPopulation / totalPopulation : 0;
             const ruralCoverage = polygonCoverage(state.municipalityBoundaries.get(code), scenario.geojson);
+            const urbanFactor = state.geography.weights.urban * urbanCoverage;
+            const ruralFactor = state.geography.weights.rural * ruralCoverage;
             const factor = clamp(
-                state.geography.weights.urban * urbanCoverage + state.geography.weights.rural * ruralCoverage,
+                urbanFactor + ruralFactor,
                 0,
                 1
             );
-            coverage[code] = { factor, urbanCoverage, ruralCoverage };
+            const urbanJobs = Number.isFinite(municipality.jobs) ? municipality.jobs * urbanFactor : null;
+            const ruralJobs = Number.isFinite(municipality.jobs) ? municipality.jobs * ruralFactor : null;
+            const urbanWorkplaces = Number.isFinite(municipality.workplaces) ? municipality.workplaces * urbanFactor : null;
+            const ruralWorkplaces = Number.isFinite(municipality.workplaces) ? municipality.workplaces * ruralFactor : null;
+            coverage[code] = { factor, urbanCoverage, ruralCoverage, urbanFactor, ruralFactor };
+            if ((urbanJobs || 0) + (ruralJobs || 0) >= 1) {
+                municipalityBreakdown.push({
+                    code,
+                    name: municipality.name,
+                    urbanJobs: urbanJobs === null ? null : Math.round(urbanJobs),
+                    ruralJobs: ruralJobs === null ? null : Math.round(ruralJobs),
+                    urbanWorkplaces: urbanWorkplaces === null ? null : Math.round(urbanWorkplaces),
+                    ruralWorkplaces: ruralWorkplaces === null ? null : Math.round(ruralWorkplaces),
+                    jobs: urbanJobs === null || ruralJobs === null ? null : Math.round(urbanJobs + ruralJobs),
+                });
+            }
             if (Number.isFinite(municipality.jobs)) {
                 jobs += municipality.jobs * factor;
                 hasJobs = true;
@@ -518,6 +561,7 @@
                 .map((branch) => ({ ...branch, jobs: Math.round(branch.jobs) }))
                 .sort((a, b) => b.jobs - a.jobs)
                 .slice(0, 6),
+            municipalityBreakdown: municipalityBreakdown.sort((a, b) => (b.jobs || 0) - (a.jobs || 0)),
             coverage,
         };
     }
@@ -623,6 +667,7 @@
         setValue(elements.largest, result.ready ? (result.largest?.name || 'Ingen endnu') : placeholder, !result.ready && !result.error, Boolean(result.error));
         elements.year.textContent = result.ready && state.statsYear ? `ERHV2 · ${state.statsYear} · anslået` : (result.error ? 'Datafejl' : 'Beregner grundlag…');
         renderBranchChart(elements.branches, result.branches, undefined, !result.ready && !result.error, result.error);
+        renderMunicipalityBreakdown(elements.municipalityBreakdown, result.municipalityBreakdown, !result.ready && !result.error, result.error);
         elements.singleResults.setAttribute('aria-busy', String(!result.ready));
     }
 
@@ -637,7 +682,9 @@
             setValue(target.workplaces, result.ready ? formatKnown(result.workplaces) : placeholder, !result.ready && !result.error, Boolean(result.error));
             setValue(target.cities, result.ready ? numberFormat.format(result.reachedCities.length) : placeholder, !result.ready && !result.error, Boolean(result.error));
             renderBranchChart(target.branches, result.branches, sharedMaximum, !result.ready && !result.error, result.error);
+            renderMunicipalityBreakdown(target.municipalities, result.municipalityBreakdown, !result.ready && !result.error, result.error);
         });
+        renderCompactComparisonBranches(primaryResult, secondaryResult, sharedMaximum);
         elements.comparisonResults.setAttribute('aria-busy', String(!primaryResult.ready || !secondaryResult.ready));
     }
 
@@ -649,10 +696,63 @@
         setValue(primaryTarget.workplaces, primaryResult.ready ? formatKnown(primaryResult.workplaces) : placeholder, !primaryResult.ready && !primaryResult.error, Boolean(primaryResult.error));
         setValue(primaryTarget.cities, primaryResult.ready ? numberFormat.format(primaryResult.reachedCities.length) : placeholder, !primaryResult.ready && !primaryResult.error, Boolean(primaryResult.error));
         renderBranchChart(primaryTarget.branches, primaryResult.branches, undefined, !primaryResult.ready && !primaryResult.error, primaryResult.error);
+        renderMunicipalityBreakdown(primaryTarget.municipalities, primaryResult.municipalityBreakdown, !primaryResult.ready && !primaryResult.error, primaryResult.error);
         elements.compare.secondary.name.textContent = 'Vælg udgangspunkt B';
         ['jobs', 'workplaces', 'cities'].forEach((field) => setValue(elements.compare.secondary[field], '—', false));
         elements.compare.secondary.branches.innerHTML = '<p class="empty-state">Vælg en anden by som B.</p>';
+        elements.compare.secondary.municipalities.innerHTML = '<p class="empty-state">Vælg en anden by som B.</p>';
+        elements.comparisonBranchesCompact.innerHTML = '<p class="empty-state">Vælg udgangspunkt B for at sammenligne brancher.</p>';
         elements.comparisonResults.setAttribute('aria-busy', String(!primaryResult.ready));
+    }
+
+    function renderCompactComparisonBranches(primaryResult, secondaryResult, maximum) {
+        if (primaryResult.error || secondaryResult.error) {
+            elements.comparisonBranchesCompact.innerHTML = '<p class="empty-state is-error">Branchetallene kunne ikke beregnes.</p>';
+            return;
+        }
+        if (!primaryResult.ready || !secondaryResult.ready) {
+            elements.comparisonBranchesCompact.innerHTML = '<div class="loading-chart" role="status"><span></span><span></span><span></span><small>Beregner A/B-brancher…</small></div>';
+            return;
+        }
+        const branches = new Map();
+        primaryResult.branches.forEach((branch) => branches.set(branch.code, { code: branch.code, name: branch.name, primary: branch.jobs, secondary: 0 }));
+        secondaryResult.branches.forEach((branch) => {
+            const item = branches.get(branch.code) || { code: branch.code, name: branch.name, primary: 0, secondary: 0 };
+            item.secondary = branch.jobs;
+            branches.set(branch.code, item);
+        });
+        const rows = [...branches.values()]
+            .sort((a, b) => Math.max(b.primary, b.secondary) - Math.max(a.primary, a.secondary))
+            .slice(0, 6);
+        elements.comparisonBranchesCompact.innerHTML = `<h3>Største brancher · A/B</h3>${rows.map((branch) => `
+            <div class="compact-branch-row">
+                <strong>${escapeHtml(shortBranchName(branch.name))}</strong>
+                <div class="compact-branch-value"><b>A</b><span class="branch-track"><i style="width:${Math.max(3, (branch.primary / maximum) * 100).toFixed(1)}%"></i></span><em>${numberFormat.format(branch.primary)}</em></div>
+                <div class="compact-branch-value is-secondary"><b>B</b><span class="branch-track"><i style="width:${Math.max(3, (branch.secondary / maximum) * 100).toFixed(1)}%"></i></span><em>${numberFormat.format(branch.secondary)}</em></div>
+            </div>
+        `).join('')}`;
+    }
+
+    function renderMunicipalityBreakdown(target, municipalities, loading = false, error = null) {
+        if (error) {
+            target.innerHTML = '<p class="empty-state is-error">Kommunetallene kunne ikke beregnes.</p>';
+            return;
+        }
+        if (loading) {
+            target.innerHTML = '<div class="loading-list" role="status"><span></span><span></span><p>Beregner by- og landandele…</p></div>';
+            return;
+        }
+        if (!municipalities?.length) {
+            target.innerHTML = '<p class="empty-state">Zonen dækker endnu ingen beregnede job.</p>';
+            return;
+        }
+        target.innerHTML = municipalities.map((municipality) => `
+            <div class="municipality-row">
+                <div><strong>${escapeHtml(municipality.name)}</strong><b>${formatKnown(municipality.jobs)} job</b></div>
+                <span><i>By · 90 %</i><em>${formatKnown(municipality.urbanJobs)} job · ${formatKnown(municipality.urbanWorkplaces)} arbejdssteder</em></span>
+                <span><i>Land · 10 %</i><em>${formatKnown(municipality.ruralJobs)} job · ${formatKnown(municipality.ruralWorkplaces)} arbejdssteder</em></span>
+            </div>
+        `).join('');
     }
 
     function renderBranchChart(target, branches, maximum = branches[0]?.jobs || 1, loading = false, error = null) {
@@ -733,6 +833,7 @@
             marker.setStyle(markerStyle(status, status === 'muted' ? 0 : 1));
             marker.setRadius(status === 'muted' ? 5 : 9);
             marker.setPopupContent(cityPopup(city));
+            state.touchMarkers.get(city.id)?.setPopupContent(cityPopup(city));
         });
     }
 
@@ -783,13 +884,31 @@
             ? `<span>A: ${formatMinutes(primary.travelSeconds)} · ${formatDistance(primary.distanceKm)}</span><span>B: ${formatMinutes(secondary?.travelSeconds)} · ${formatDistance(secondary?.distanceKm)}</span>`
             : `<span>${formatMinutes(primary.travelSeconds)} · ${formatDistance(primary.distanceKm)}</span>`;
         const canSelect = city.municipalityCode === '665' && validOrigin(city.id);
+        const cityJobs = estimatedSettlementJobs(city);
+        const cityJobsLine = cityJobs === null
+            ? ''
+            : `<span class="city-model-jobs">Byandel i 90/10-modellen: <strong>${numberFormat.format(cityJobs)} job</strong></span>`;
         const selection = canSelect
             ? `<div class="city-popup-actions">
-                <button type="button" data-select-origin="primary" data-origin-id="${escapeHtml(city.id)}">Vælg som A</button>
+                <button type="button" data-select-origin="primary" data-origin-id="${escapeHtml(city.id)}">${state.comparing ? 'Vælg som A' : 'Vælg udgangspunkt'}</button>
                 ${state.comparing ? `<button type="button" data-select-origin="secondary" data-origin-id="${escapeHtml(city.id)}">Vælg som B</button>` : ''}
               </div>`
             : '';
-        return `<div class="city-popup"><strong>${escapeHtml(city.name)}</strong>${routes}<span>${escapeHtml(city.municipality)} Kommune</span>${selection}</div>`;
+        return `<div class="city-popup"><strong>${escapeHtml(city.name)}</strong>${routes}<span>${escapeHtml(city.municipality)} Kommune</span>${cityJobsLine}${selection}</div>`;
+    }
+
+    function estimatedSettlementJobs(city) {
+        if (!state.statsReady || !state.geographyReady) return null;
+        const municipality = state.municipalities[city.municipalityCode];
+        const settlements = state.settlementsByMunicipality.get(String(city.municipalityCode)) || [];
+        const settlement = settlements.find((item) => normalizedPlaceName(item.name) === normalizedPlaceName(city.name));
+        const totalPopulation = settlements.reduce((sum, item) => sum + item.population, 0);
+        if (!settlement || !Number.isFinite(municipality?.jobs) || totalPopulation <= 0) return null;
+        return Math.round(municipality.jobs * state.geography.weights.urban * settlement.population / totalPopulation);
+    }
+
+    function normalizedPlaceName(name) {
+        return String(name).toLocaleLowerCase('da-DK').replace(/\s*\(del af flere kommuner\)$/u, '').trim();
     }
 
     function toggleMobileMap() {
