@@ -7,11 +7,15 @@ final class TravelTimeProvider
     public function __construct(
         private string $baseUrl,
         private string $appId,
-        private string $apiKey
+        private string $apiKey,
+        private float $timeFactor = 1.0
     ) {
         $this->baseUrl = rtrim($this->baseUrl, '/');
         if ($this->appId === '' || $this->apiKey === '') {
             throw new RuntimeException('TravelTime mangler Application ID eller Application Key.');
+        }
+        if ($this->timeFactor <= 0 || $this->timeFactor > 2) {
+            throw new RuntimeException('TravelTime-kalibreringsfaktoren er ugyldig.');
         }
     }
 
@@ -28,7 +32,8 @@ final class TravelTimeProvider
                     'id' => 'isochrone',
                     'coords' => $this->coords($origin),
                     'transportation' => ['type' => 'driving'],
-                    'travel_time' => $minutes * 60,
+                    // En faktor under 1 udvider råzonen, så den viste tid svarer til den kalibrerede tid.
+                    'travel_time' => (int) round($minutes * 60 / $this->timeFactor),
                     'arrival_time_period' => 'weekday_morning',
                 ]],
             ],
@@ -83,7 +88,9 @@ final class TravelTimeProvider
                 $properties = $routesById[$destinationId] ?? [];
 
                 return array_merge($city, [
-                    'travelSeconds' => isset($properties['travel_time']) ? (int) round((float) $properties['travel_time']) : null,
+                    'travelSeconds' => isset($properties['travel_time'])
+                        ? (int) round((float) $properties['travel_time'] * $this->timeFactor)
+                        : null,
                     'distanceKm' => isset($properties['distance']) ? round((float) $properties['distance'] / 1000, 1) : null,
                 ]);
             },

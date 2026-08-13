@@ -45,6 +45,9 @@ test -f "$target/config/secrets.php"
 
 api_response="$(curl -fsS --max-time 90 'https://testbibkort.landogbyforeningen.dk/api/routing.php?action=matrix&origin=baekmarksbro')"
 [[ "$api_response" == *'"provider":"TravelTime"'* ]]
+geography_response="$(curl -fsS --max-time 180 'https://testbibkort.landogbyforeningen.dk/api/geography.php')"
+[[ "$geography_response" == *'"ok":true'* ]]
+[[ "$geography_response" == *'"urban":0.9'* ]]
 page_response="$(curl -fsS --max-time 30 'https://testbibkort.landogbyforeningen.dk/')"
 [[ "$page_response" == *'<h1>Arbejdsmarkedskort</h1>'* ]]
 

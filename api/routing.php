@@ -14,7 +14,8 @@ $provider = $routingConfig['provider'] === 'TravelTime'
     ? new TravelTimeProvider(
         $routingConfig['traveltime_base_url'],
         $routingConfig['traveltime_app_id'],
-        $routingConfig['traveltime_api_key']
+        $routingConfig['traveltime_api_key'],
+        (float) $routingConfig['travel_time_factor']
     )
     : new ValhallaProvider($routingConfig['base_url']);
 $action = $_GET['action'] ?? '';
@@ -29,7 +30,7 @@ $origin = $config['origins'][$originId];
 
 try {
     if ($action === 'matrix') {
-        $cacheKey = 'routing-matrix-' . sha1(json_encode([$origin, $config['cities'], $provider->name()]));
+        $cacheKey = 'routing-matrix-' . sha1(json_encode([$origin, $config['cities'], $provider->name(), $routingConfig['travel_time_factor']]));
         $cached = app_cache_read($cacheKey, $ttl);
         if ($cached !== null) {
             app_json_response([
@@ -74,7 +75,7 @@ try {
             app_json_response(['ok' => false, 'error' => 'minutes skal være 15–90 i trin på 5.'], 422);
         }
 
-        $cacheKey = 'routing-isochrone-' . sha1(json_encode([$origin, $minutes, $provider->name()]));
+        $cacheKey = 'routing-isochrone-' . sha1(json_encode([$origin, $minutes, $provider->name(), $routingConfig['travel_time_factor']]));
         $cached = app_cache_read($cacheKey, $ttl);
         if ($cached !== null) {
             app_json_response([
