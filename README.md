@@ -10,7 +10,8 @@ Appen er bygget til et almindeligt PHP-webhotel og kræver ingen database, Compo
 - delbare sammenligninger via URL-parameteren `origin`
 - to udgangspunkter kan sammenlignes med hver sin zone, nøgletal og branchegraf
 - TravelTime-isochroner baseret på vejnettet, ikke simple cirkler; Valhalla bruges som lokal fallback uden nøgler
-- TravelTime er kalibreret til den kendte tur Bækmarksbro–Gødstrup på 44 minutter
+- byernes start- og slutpunkter følger Google Maps; brugerens præcise punkter for Bækmarksbro og Vilhelmsborgvej er bevaret
+- TravelTime er lokalt kalibreret til Bækmarksbro–Gødstrup og Thyborøn–Struer, som begge er 44 minutter i Google Directions
 - faktiske køretider og vejafstande til 14 arbejdsmarkedsbyer
 - servercache af både isochroner, køretidsmatrix og Statistikbank-data
 - seneste tilgængelige ERHV2-år findes automatisk
@@ -105,7 +106,7 @@ Der skal ikke køres Composer, npm eller andre buildtrin på serveren. `cache/.h
 
 ## Metode og kendte begrænsninger
 
-Isochronen er en modelberegning på vejnettet. Resultatet afhænger af routingproviderens kortdata og kørselsmodel og er ikke en garanti for en bestemt rejsetid. TravelTime-beregningen bruger en typisk hverdagsmorgen, ikke live trafik, og kalibreres med faktor 0,942 mod den kendte 44-minutters tur Bækmarksbro–Gødstrup.
+Isochronen er en modelberegning på vejnettet. Resultatet afhænger af routingproviderens kortdata og kørselsmodel og er ikke en garanti for en bestemt rejsetid. TravelTime-beregningen bruger en typisk hverdagsmorgen, ikke live trafik. Bækmarksbro kalibreres mod turen til Gødstrup og Thyborøn mod turen til Struer; begge Google Directions-referencer er 44 minutter. Øvrige udgangspunkter anvender indtil videre Bækmarksbro-faktoren, indtil der findes lokale referencekørsler.
 
 ERHV2 offentliggør præcise totaler på kommuneniveau, men ikke jobtal pr. adresse. Modellen fordeler derfor 90 % af hver kommunes tal på alle officielle BY3-byområder efter befolkning. En byandel medregnes, når byens officielle visuelle center ligger i køretidszonen. De resterende 10 % fordeles proportionalt efter zonens arealoverlap med kommunen. Brancher og arbejdssteder anvender samme geografiske faktor. Tallene i zonen er derfor **anslåede**, mens kommunetotalerne fortsat stemmer med ERHV2.
 

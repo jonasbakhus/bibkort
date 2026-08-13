@@ -10,14 +10,6 @@ app_require_get();
 
 $config = require __DIR__ . '/../config/app.php';
 $routingConfig = $config['routing'];
-$provider = $routingConfig['provider'] === 'TravelTime'
-    ? new TravelTimeProvider(
-        $routingConfig['traveltime_base_url'],
-        $routingConfig['traveltime_app_id'],
-        $routingConfig['traveltime_api_key'],
-        (float) $routingConfig['travel_time_factor']
-    )
-    : new ValhallaProvider($routingConfig['base_url']);
 $action = $_GET['action'] ?? '';
 $ttl = (int) $config['routing']['cache_ttl'];
 $originId = is_string($_GET['origin'] ?? null) ? $_GET['origin'] : $config['default_origin'];
@@ -26,11 +18,21 @@ if (!isset($config['origins'][$originId])) {
     app_json_response(['ok' => false, 'error' => 'Ukendt udgangspunkt.'], 422);
 }
 
+$timeFactor = (float) ($routingConfig['origin_time_factors'][$originId] ?? $routingConfig['travel_time_factor']);
+$provider = $routingConfig['provider'] === 'TravelTime'
+    ? new TravelTimeProvider(
+        $routingConfig['traveltime_base_url'],
+        $routingConfig['traveltime_app_id'],
+        $routingConfig['traveltime_api_key'],
+        $timeFactor
+    )
+    : new ValhallaProvider($routingConfig['base_url']);
+
 $origin = $config['origins'][$originId];
 
 try {
     if ($action === 'matrix') {
-        $cacheKey = 'routing-matrix-' . sha1(json_encode([$origin, $config['cities'], $provider->name(), $routingConfig['travel_time_factor']]));
+        $cacheKey = 'routing-matrix-' . sha1(json_encode([$origin, $config['cities'], $provider->name(), $timeFactor]));
         $cached = app_cache_read($cacheKey, $ttl);
         if ($cached !== null) {
             app_json_response([
@@ -75,7 +77,7 @@ try {
             app_json_response(['ok' => false, 'error' => 'minutes skal være 15–90 i trin på 5.'], 422);
         }
 
-        $cacheKey = 'routing-isochrone-' . sha1(json_encode([$origin, $minutes, $provider->name(), $routingConfig['travel_time_factor']]));
+        $cacheKey = 'routing-isochrone-' . sha1(json_encode([$origin, $minutes, $provider->name(), $timeFactor]));
         $cached = app_cache_read($cacheKey, $ttl);
         if ($cached !== null) {
             app_json_response([

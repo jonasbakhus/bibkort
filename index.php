@@ -158,7 +158,7 @@ $isStaging = str_starts_with($host, 'testbibkort.');
 
             <section class="method-note" aria-labelledby="method-title">
                 <h2 id="method-title">Om tallene</h2>
-                <p>Køretidsfladen følger vejnettet. TravelTime-tiderne er kalibreret med faktor 0,942 mod den kendte tur Bækmarksbro–Gødstrup på 44 minutter.</p>
+                <p>Køretidsfladen følger vejnettet. Byernes start- og slutpunkter følger Google Maps. TravelTime er lokalt kalibreret mod Bækmarksbro–Gødstrup og Thyborøn–Struer, som begge er 44 minutter i Google Directions.</p>
                 <p>Præcise jobtal pr. adresse er ikke offentligt tilgængelige. Derfor fordeles 90 % af kommunens ERHV2-tal på officielle byområder efter deres BY3-befolkning; en byandel tæller, når bymidten ligger i zonen. De sidste 10 % fordeles efter, hvor stor en del af kommunens landareal zonen dækker. Resultaterne er modelberegnede anslåede tal.</p>
             </section>
 
