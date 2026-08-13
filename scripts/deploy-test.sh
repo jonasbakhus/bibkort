@@ -49,8 +49,13 @@ php "$target/api/geography.php" > "$geography_prewarm"
 grep -Fq '"ok":true' "$geography_prewarm"
 grep -Fq '"urban":0.9' "$geography_prewarm"
 
-api_response="$(curl -fsS --max-time 90 'https://testbibkort.landogbyforeningen.dk/api/routing.php?action=matrix&origin=baekmarksbro')"
-[[ "$api_response" == *'"provider":"TravelTime"'* ]]
+routing_prewarm="$stage/routing-prewarm.json"
+php "$target/scripts/prewarm-routing.php" > "$routing_prewarm"
+grep -Fq '"provider":"TravelTime"' "$routing_prewarm"
+
+routing_response="$stage/routing-http.json"
+curl -fsS --max-time 30 'https://testbibkort.landogbyforeningen.dk/api/routing.php?action=matrix&origin=baekmarksbro' -o "$routing_response"
+grep -Fq '"provider":"TravelTime"' "$routing_response"
 geography_response="$stage/geography-http.json"
 curl -fsS --max-time 30 'https://testbibkort.landogbyforeningen.dk/api/geography.php' -o "$geography_response"
 grep -Fq '"ok":true' "$geography_response"
