@@ -43,11 +43,18 @@ rsync -a --delete \
 chmod 775 "$target/cache"
 test -f "$target/config/secrets.php"
 
+# Opbyg den tunge geografi-cache uden webserverens korte backend-timeout.
+geography_prewarm="$stage/geography-prewarm.json"
+php "$target/api/geography.php" > "$geography_prewarm"
+grep -Fq '"ok":true' "$geography_prewarm"
+grep -Fq '"urban":0.9' "$geography_prewarm"
+
 api_response="$(curl -fsS --max-time 90 'https://testbibkort.landogbyforeningen.dk/api/routing.php?action=matrix&origin=baekmarksbro')"
 [[ "$api_response" == *'"provider":"TravelTime"'* ]]
-geography_response="$(curl -fsS --max-time 180 'https://testbibkort.landogbyforeningen.dk/api/geography.php')"
-[[ "$geography_response" == *'"ok":true'* ]]
-[[ "$geography_response" == *'"urban":0.9'* ]]
+geography_response="$stage/geography-http.json"
+curl -fsS --max-time 30 'https://testbibkort.landogbyforeningen.dk/api/geography.php' -o "$geography_response"
+grep -Fq '"ok":true' "$geography_response"
+grep -Fq '"urban":0.9' "$geography_response"
 page_response="$(curl -fsS --max-time 30 'https://testbibkort.landogbyforeningen.dk/')"
 [[ "$page_response" == *'<h1>Arbejdsmarkedskort</h1>'* ]]
 
