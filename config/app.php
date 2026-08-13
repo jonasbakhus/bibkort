@@ -2,6 +2,19 @@
 
 declare(strict_types=1);
 
+$secrets = [];
+$secretsFile = __DIR__ . '/secrets.php';
+if (is_file($secretsFile)) {
+    $loadedSecrets = require $secretsFile;
+    if (is_array($loadedSecrets)) {
+        $secrets = $loadedSecrets;
+    }
+}
+
+$travelTimeAppId = getenv('BIBKORT_TRAVELTIME_APP_ID') ?: ($secrets['traveltime_app_id'] ?? '');
+$travelTimeApiKey = getenv('BIBKORT_TRAVELTIME_API_KEY') ?: ($secrets['traveltime_api_key'] ?? '');
+$preferredRoutingProvider = $travelTimeAppId !== '' && $travelTimeApiKey !== '' ? 'TravelTime' : 'Valhalla';
+
 return [
     'name' => 'Bo i Bækmarksbro – arbejdsmarkedskort',
     'default_origin' => 'baekmarksbro',
@@ -42,8 +55,11 @@ return [
         'default' => 45,
     ],
     'routing' => [
-        'provider' => 'Valhalla',
+        'provider' => getenv('BIBKORT_ROUTING_PROVIDER') ?: $preferredRoutingProvider,
         'base_url' => getenv('BIBKORT_VALHALLA_URL') ?: 'https://valhalla1.openstreetmap.de',
+        'traveltime_base_url' => 'https://api.traveltimeapp.com/v4',
+        'traveltime_app_id' => (string) $travelTimeAppId,
+        'traveltime_api_key' => (string) $travelTimeApiKey,
         'cache_ttl' => 30 * 24 * 60 * 60,
     ],
     'statbank' => [

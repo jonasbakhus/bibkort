@@ -4,11 +4,19 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/../lib/bootstrap.php';
 require_once __DIR__ . '/../lib/Routing/ValhallaProvider.php';
+require_once __DIR__ . '/../lib/Routing/TravelTimeProvider.php';
 
 app_require_get();
 
 $config = require __DIR__ . '/../config/app.php';
-$provider = new ValhallaProvider($config['routing']['base_url']);
+$routingConfig = $config['routing'];
+$provider = $routingConfig['provider'] === 'TravelTime'
+    ? new TravelTimeProvider(
+        $routingConfig['traveltime_base_url'],
+        $routingConfig['traveltime_app_id'],
+        $routingConfig['traveltime_api_key']
+    )
+    : new ValhallaProvider($routingConfig['base_url']);
 $action = $_GET['action'] ?? '';
 $ttl = (int) $config['routing']['cache_ttl'];
 $originId = is_string($_GET['origin'] ?? null) ? $_GET['origin'] : $config['default_origin'];

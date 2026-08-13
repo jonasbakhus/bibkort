@@ -133,7 +133,11 @@ $isStaging = str_starts_with($host, 'testbibkort.');
                 <strong>Kilder</strong>
                 <a href="https://www.statbank.dk/ERHV2" target="_blank" rel="noopener">Danmarks Statistik / ERHV2</a>
                 <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a>
-                <a href="https://valhalla.github.io/valhalla/" target="_blank" rel="noopener">Valhalla routing</a>
+                <?php if ($config['routing']['provider'] === 'TravelTime'): ?>
+                    <a href="https://traveltime.com/" target="_blank" rel="noopener">TravelTime routing</a>
+                <?php else: ?>
+                    <a href="https://valhalla.github.io/valhalla/" target="_blank" rel="noopener">Valhalla routing</a>
+                <?php endif; ?>
             </footer>
         </aside>
     </main>

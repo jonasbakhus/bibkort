@@ -28,6 +28,18 @@ cp -a "$deploy_tmp/bibkort-BRANCH/." "MAPPE/"
 chmod 775 "MAPPE/cache"
 ```
 
+## TravelTime-oplysninger på hvert miljø
+
+Opret `config/secrets.php` separat i både `~/testbibkort` og `~/bibkort`. Brug strukturen fra `config/secrets.example.php`, og indsæt miljøets Application ID og Application Key. Filen er ignoreret af Git og må ikke committes.
+
+Udrulningskommandoen ovenfor sletter ikke filen, så den skal kun oprettes første gang. Kontrollér bagefter:
+
+```text
+https://testbibkort.landogbyforeningen.dk/api/routing.php?action=matrix&origin=baekmarksbro
+```
+
+Svaret skal indeholde `"provider":"TravelTime"`.
+
 ## Godkend testversionen
 
 Lokalt i repositoryet:
