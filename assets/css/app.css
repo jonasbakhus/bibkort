@@ -52,6 +52,7 @@ a { color: inherit; }
 
 .map-region { grid-area: map; position: relative; min-width: 0; }
 #map { width: 100%; height: 100%; background: #dfe8e5; }
+.map-mobile-controls { display: none; }
 
 .hero { padding-bottom: 20px; }
 .brand { display: inline-flex; align-items: center; gap: 10px; margin-bottom: 21px; color: var(--ink); text-decoration: none; }
@@ -373,27 +374,13 @@ body.is-comparing .info-panel { padding-inline: 24px; }
 @keyframes loading-spin { to { transform: rotate(360deg); } }
 @keyframes loading-shimmer { from { background-position: 100% 0; } to { background-position: -100% 0; } }
 
-.leaflet-tooltip.city-label {
-    padding: 2px 5px;
-    border: 0;
-    border-radius: 4px;
-    background: rgb(255 255 255 / 88%);
-    box-shadow: 0 1px 5px rgb(25 49 63 / 15%);
-    color: var(--ink);
-    font-size: 10px;
-    font-weight: 750;
-    transition: opacity 150ms ease;
-}
-.leaflet-tooltip.city-label::before { display: none; }
-.leaflet-tooltip.city-label.is-muted { display: none; opacity: 0.48; font-weight: 600; }
-#map.map-zoom-detail .leaflet-tooltip.city-label.is-muted { display: block; }
-.leaflet-tooltip.city-label.is-reached { color: var(--accent-dark); opacity: 1; }
-.leaflet-tooltip.city-label.is-secondary { color: #5140b8; opacity: 1; }
-.leaflet-tooltip.city-label.is-both { color: #403766; opacity: 1; font-weight: 800; }
-.leaflet-tooltip.city-label.is-near { color: #8d5808; background: #fff7e7; opacity: 1; }
 .city-popup { display: grid; gap: 2px; min-width: 155px; color: var(--ink); }
 .city-popup strong { font-size: 0.95rem; }
 .city-popup span { color: var(--ink-soft); font-size: 0.75rem; }
+.city-popup-actions { display: flex; gap: 6px; margin-top: 7px; }
+.city-popup-actions button { flex: 1; padding: 6px 8px; border: 1px solid var(--accent); border-radius: 7px; background: var(--accent); color: #fff; font-size: .72rem; font-weight: 800; cursor: pointer; }
+.city-popup-actions button:last-child:not(:first-child) { border-color: var(--compare); background: var(--compare); }
+.city-popup-actions button:hover, .city-popup-actions button:focus-visible { filter: brightness(.92); outline: 2px solid #fff; outline-offset: -3px; }
 .leaflet-control-attribution { font-size: 9px; }
 .google-maps-attribution { color: #5e5e5e; font-size: 12px; font-style: normal; font-weight: 400; letter-spacing: normal; white-space: nowrap; }
 
@@ -415,11 +402,37 @@ noscript { display: block; padding: 20px; background: #fff3cd; }
     }
     body.is-comparing .app-shell { display: flex; }
     .map-region { order: 1; height: min(45svh, 440px); min-height: 310px; }
+    .map-mobile-controls {
+        position: absolute;
+        z-index: 1000;
+        top: 10px;
+        left: 10px;
+        display: flex;
+        align-items: stretch;
+        gap: 7px;
+    }
+    .map-mini-brand, .map-size-toggle {
+        min-height: 42px;
+        border: 1px solid rgb(255 255 255 / 85%);
+        border-radius: 9px;
+        background: rgb(255 255 255 / 94%);
+        box-shadow: 0 3px 14px rgb(25 49 63 / 18%);
+        backdrop-filter: blur(8px);
+    }
+    .map-mini-brand { display: grid; width: 45px; place-items: center; }
+    .map-mini-brand img { display: block; width: 28px; height: 31px; object-fit: contain; }
+    .map-size-toggle { display: inline-flex; align-items: center; gap: 7px; padding: 8px 11px; color: var(--ink); font-size: .74rem; font-weight: 800; cursor: pointer; }
+    .map-size-icon { width: 14px; height: 14px; border: 2px solid currentColor; border-radius: 2px; }
+    .map-size-toggle:focus-visible { outline: 3px solid rgb(15 118 110 / 32%); outline-offset: 2px; }
+    .map-loading { top: 61px; }
+    body.is-map-expanded { overflow: hidden; }
+    body.is-map-expanded .map-region { position: fixed; z-index: 2000; inset: 0; width: 100%; height: 100dvh; min-height: 0; }
+    body.is-map-expanded .map-size-icon { box-shadow: inset 0 0 0 2px #fff; background: var(--ink); }
     .info-panel { order: 2; overflow: visible; padding: 26px 20px 30px; border: 0; box-shadow: none; }
     .hero { padding-bottom: 20px; }
     h1 { font-size: 2rem; }
     .map-legend { left: 10px; bottom: 22px; }
-    .map-loading { left: 10px; top: 10px; }
+    .map-loading { left: 10px; }
 }
 
 @media (max-width: 600px) {

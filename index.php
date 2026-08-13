@@ -49,6 +49,14 @@ $isGoogle = $config['variant'] === 'google';
     <main class="app-shell">
         <section class="map-region" aria-label="Kort over køretidsområdet">
             <div id="map"></div>
+            <div class="map-mobile-controls">
+                <a class="map-mini-brand" href="https://landogbyforeningen.dk/" target="_blank" rel="noopener" aria-label="Land og By">
+                    <img src="assets/brand/land-og-by-logo.svg?v=<?= $assetVersion ?>" alt="Land og By">
+                </a>
+                <button id="map-size-toggle" class="map-size-toggle" type="button" aria-expanded="false" aria-controls="map">
+                    <span class="map-size-icon" aria-hidden="true"></span><span>Udvid kort</span>
+                </button>
+            </div>
             <div class="map-legend" aria-hidden="true">
                 <span><i class="legend-dot origin-dot"></i><span id="legend-primary">Vælg udgangspunkt A</span></span>
                 <span id="legend-secondary-wrap" hidden><i class="legend-dot secondary-dot"></i><span id="legend-secondary">Vælg B</span></span>

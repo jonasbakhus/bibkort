@@ -60,6 +60,7 @@
         citiesSection: document.getElementById('cities-section'),
         selectionPrompt: document.getElementById('selection-prompt'),
         singleOriginName: document.getElementById('single-origin-name'),
+        mapSizeToggle: document.getElementById('map-size-toggle'),
         compare: {
             primary: comparisonElements('primary'),
             secondary: comparisonElements('secondary'),
@@ -89,20 +90,23 @@
     if (config.variant === 'google') {
         map.attributionControl.addAttribution('<span class="google-maps-attribution" translate="no">Google Maps</span>');
     }
-    map.on('zoomend', updateMapDetailClass);
-    updateMapDetailClass();
     loadMunicipalityBoundary();
 
     config.cities.forEach((city) => {
         const marker = L.circleMarker([city.lat, city.lon], markerStyle('muted', 0)).addTo(map);
-        marker.bindTooltip(city.name, {
-            permanent: true,
-            direction: 'top',
-            offset: [0, -7],
-            className: 'city-label is-muted',
-        });
         marker.bindPopup(cityPopup(city));
         state.markers.set(city.id, marker);
+    });
+    map.on('popupopen', ({ popup }) => {
+        popup.getElement()?.querySelectorAll('[data-select-origin]').forEach((button) => {
+            button.addEventListener('click', () => {
+                const key = button.dataset.selectOrigin;
+                const originId = button.dataset.originId;
+                if (!['primary', 'secondary'].includes(key) || !validOrigin(originId)) return;
+                selectOrigin(key, originId);
+                map.closePopup();
+            });
+        });
     });
 
     if (state.scenarios.primary.origin) addOriginMarker(state.scenarios.primary);
@@ -120,6 +124,7 @@
 
     elements.primarySelect.addEventListener('change', () => selectOrigin('primary', elements.primarySelect.value));
     elements.secondarySelect.addEventListener('change', () => selectOrigin('secondary', elements.secondarySelect.value));
+    elements.mapSizeToggle?.addEventListener('click', toggleMobileMap);
     elements.compareToggle.addEventListener('click', () => {
         if (!state.scenarios.primary.origin) return;
         state.comparing = !state.comparing;
@@ -221,6 +226,8 @@
             return;
         }
         resetScenarioOrigin(scenario, originId);
+        if (key === 'primary') elements.primarySelect.value = originId;
+        else elements.secondarySelect.value = originId;
         if (key === 'primary' && state.scenarios.secondary.originId === originId) {
             removeScenarioMap(state.scenarios.secondary);
             resetScenarioOrigin(state.scenarios.secondary, null);
@@ -726,12 +733,6 @@
             marker.setStyle(markerStyle(status, status === 'muted' ? 0 : 1));
             marker.setRadius(status === 'muted' ? 5 : 9);
             marker.setPopupContent(cityPopup(city));
-            const tooltip = marker.getTooltip();
-            if (tooltip) {
-                tooltip.options.offset = L.point(0, -(marker.getRadius() + 2));
-                const node = tooltip.getElement();
-                if (node) node.className = `leaflet-tooltip city-label is-${status}`;
-            }
         });
     }
 
@@ -781,7 +782,21 @@
         const routes = state.comparing
             ? `<span>A: ${formatMinutes(primary.travelSeconds)} · ${formatDistance(primary.distanceKm)}</span><span>B: ${formatMinutes(secondary?.travelSeconds)} · ${formatDistance(secondary?.distanceKm)}</span>`
             : `<span>${formatMinutes(primary.travelSeconds)} · ${formatDistance(primary.distanceKm)}</span>`;
-        return `<div class="city-popup"><strong>${escapeHtml(city.name)}</strong>${routes}<span>${escapeHtml(city.municipality)} Kommune</span></div>`;
+        const canSelect = city.municipalityCode === '665' && validOrigin(city.id);
+        const selection = canSelect
+            ? `<div class="city-popup-actions">
+                <button type="button" data-select-origin="primary" data-origin-id="${escapeHtml(city.id)}">Vælg som A</button>
+                ${state.comparing ? `<button type="button" data-select-origin="secondary" data-origin-id="${escapeHtml(city.id)}">Vælg som B</button>` : ''}
+              </div>`
+            : '';
+        return `<div class="city-popup"><strong>${escapeHtml(city.name)}</strong>${routes}<span>${escapeHtml(city.municipality)} Kommune</span>${selection}</div>`;
+    }
+
+    function toggleMobileMap() {
+        const expanded = document.body.classList.toggle('is-map-expanded');
+        elements.mapSizeToggle.setAttribute('aria-expanded', String(expanded));
+        elements.mapSizeToggle.querySelector('span:last-child').textContent = expanded ? 'Vis indhold' : 'Udvid kort';
+        window.setTimeout(() => map.invalidateSize(), 80);
     }
 
     function applyComparisonMode() {
@@ -830,10 +845,6 @@
     function updateSliderProgress() {
         const progress = ((state.minutes - config.slider.min) / (config.slider.max - config.slider.min)) * 100;
         elements.slider.style.setProperty('--progress', `${progress}%`);
-    }
-
-    function updateMapDetailClass() {
-        map.getContainer().classList.toggle('map-zoom-detail', map.getZoom() >= 10);
     }
 
     function originIcon(name, key) {
