@@ -562,7 +562,8 @@
             const coveredSettlements = settlements.filter((settlement) => pointInZone(settlement.lon, settlement.lat, scenario.geojson));
             const coveredPopulation = coveredSettlements.reduce((sum, settlement) => sum + settlement.population, 0);
             const urbanCoverage = totalPopulation > 0 ? coveredPopulation / totalPopulation : 0;
-            const ruralCoverage = polygonCoverage(state.municipalityBoundaries.get(code), scenario.geojson);
+            const ruralGeography = polygonCoverageMetrics(state.municipalityBoundaries.get(code), scenario.geojson);
+            const ruralCoverage = ruralGeography.fraction;
             const urbanFactor = state.geography.weights.urban * urbanCoverage;
             const ruralFactor = state.geography.weights.rural * ruralCoverage;
             const factor = clamp(
@@ -574,7 +575,15 @@
             const ruralJobs = Number.isFinite(municipality.jobs) ? municipality.jobs * ruralFactor : null;
             const urbanWorkplaces = Number.isFinite(municipality.workplaces) ? municipality.workplaces * urbanFactor : null;
             const ruralWorkplaces = Number.isFinite(municipality.workplaces) ? municipality.workplaces * ruralFactor : null;
-            coverage[code] = { factor, urbanCoverage, ruralCoverage, urbanFactor, ruralFactor };
+            coverage[code] = {
+                factor,
+                urbanCoverage,
+                ruralCoverage,
+                urbanFactor,
+                ruralFactor,
+                overlapAreaM2: ruralGeography.overlapAreaM2,
+                municipalityAreaM2: ruralGeography.municipalityAreaM2,
+            };
             if ((ruralCoverage > 0 || coveredSettlements.length > 0) && Number.isFinite(municipality.jobs)) {
                 const totalJobs = Math.round(municipality.jobs);
                 const urbanBudget = Math.max(0, Math.round(urbanJobs || 0));
@@ -601,20 +610,21 @@
                 const roundedUrbanJobs = cityJobs.reduce((sum, settlement) => sum + settlement.jobs, 0);
                 const roundedRuralJobs = Math.min(Math.max(0, totalJobs - roundedUrbanJobs), Math.max(0, Math.round(ruralJobs || 0)));
                 const inZoneJobs = roundedUrbanJobs + roundedRuralJobs;
-                if (inZoneJobs > 0) {
-                    municipalityBreakdown.push({
-                        code,
-                        name: municipality.name,
-                        cityJobs: cityJobs.filter((settlement) => settlement.jobs > 0),
-                        urbanJobs: roundedUrbanJobs,
-                        ruralJobs: roundedRuralJobs,
-                        urbanWorkplaces: urbanWorkplaces === null ? null : Math.round(urbanWorkplaces),
-                        ruralWorkplaces: ruralWorkplaces === null ? null : Math.round(ruralWorkplaces),
-                        jobs: inZoneJobs,
-                        outsideJobs: Math.max(0, totalJobs - inZoneJobs),
-                        totalJobs,
-                    });
-                }
+                municipalityBreakdown.push({
+                    code,
+                    name: municipality.name,
+                    cityJobs: cityJobs.filter((settlement) => settlement.jobs > 0),
+                    urbanJobs: roundedUrbanJobs,
+                    ruralJobs: roundedRuralJobs,
+                    urbanWorkplaces: urbanWorkplaces === null ? null : Math.round(urbanWorkplaces),
+                    ruralWorkplaces: ruralWorkplaces === null ? null : Math.round(ruralWorkplaces),
+                    jobs: inZoneJobs,
+                    outsideJobs: Math.max(0, totalJobs - inZoneJobs),
+                    totalJobs,
+                    overlapAreaM2: ruralGeography.overlapAreaM2,
+                    municipalityAreaM2: ruralGeography.municipalityAreaM2,
+                    overlapPercent: ruralCoverage * 100,
+                });
             }
             if (Number.isFinite(municipality.jobs)) {
                 hasJobs = true;
@@ -700,19 +710,25 @@
         }
     }
 
-    function polygonCoverage(boundary, geojson) {
-        if (!boundary) return 0;
+    function polygonCoverageMetrics(boundary, geojson) {
+        const empty = { fraction: 0, overlapAreaM2: 0, municipalityAreaM2: 0 };
+        if (!boundary) return empty;
         try {
             const boundaryArea = turf.area(boundary);
-            if (boundaryArea <= 0) return 0;
+            if (boundaryArea <= 0) return empty;
             let overlapArea = 0;
             (geojson.features || []).forEach((zone) => {
                 const overlap = turf.intersect(turf.featureCollection([boundary, zone]));
                 if (overlap) overlapArea += turf.area(overlap);
             });
-            return clamp(overlapArea / boundaryArea, 0, 1);
+            const boundedOverlapArea = clamp(overlapArea, 0, boundaryArea);
+            return {
+                fraction: boundedOverlapArea / boundaryArea,
+                overlapAreaM2: Math.round(boundedOverlapArea),
+                municipalityAreaM2: Math.round(boundaryArea),
+            };
         } catch (error) {
-            return 0;
+            return empty;
         }
     }
 
@@ -881,7 +897,26 @@
     function emptyMunicipalityBreakdown(code, name) {
         const municipality = state.municipalities[code];
         const totalJobs = Math.round(municipality?.jobs || 0);
-        return { code, name: municipality?.name || name, cityJobs: [], urbanJobs: 0, ruralJobs: 0, jobs: 0, outsideJobs: totalJobs, totalJobs };
+        let municipalityAreaM2 = 0;
+        try {
+            const boundary = state.municipalityBoundaries.get(String(code));
+            municipalityAreaM2 = boundary ? Math.round(turf.area(boundary)) : 0;
+        } catch (error) {
+            municipalityAreaM2 = 0;
+        }
+        return {
+            code,
+            name: municipality?.name || name,
+            cityJobs: [],
+            urbanJobs: 0,
+            ruralJobs: 0,
+            jobs: 0,
+            outsideJobs: totalJobs,
+            totalJobs,
+            overlapAreaM2: 0,
+            municipalityAreaM2,
+            overlapPercent: 0,
+        };
     }
 
     function comparisonWidth(value, maximum) {
@@ -916,11 +951,24 @@
             return `<article class="municipality-row">
                 <div class="municipality-heading"><strong>${escapeHtml(municipality.name)} Kommune</strong><b>${formatKnown(municipality.jobs)} job i zonen</b></div>
                 <div class="municipality-job-bar" aria-label="Fordeling af kommunens anslåede job"><i style="width:${urbanWidth.toFixed(2)}%"></i><i style="width:${ruralWidth.toFixed(2)}%"></i><i style="width:${outsideWidth.toFixed(2)}%"></i></div>
+                <span class="municipality-overlap" title="Det geografiske overlap bruges til at fordele kommunens 10 %-pulje for job uden for byerne."><i>Geografisk overlap · grundlag for 10 %-puljen</i><em>${formatSquareMetres(municipality.overlapAreaM2)} · ${formatCoveragePercent(municipality.overlapPercent)} af kommunen</em></span>
                 <div class="municipality-cities"><small>Byer i zonen · del af 90 %</small>${cities}</div>
                 <span class="municipality-remainder"><i>Øvrigt område i zonen · del af 10 %</i><em>${formatKnown(municipality.ruralJobs)} job</em></span>
                 <span class="municipality-outside"><i>Uden for zonen</i><em>${formatKnown(municipality.outsideJobs)} job</em></span>
                 <footer>I alt i kommunen: ${formatKnown(municipality.totalJobs)} anslåede job</footer>
             </article>`;
+    }
+
+    function formatSquareMetres(value) {
+        const area = Number.isFinite(Number(value)) ? Math.max(0, Math.round(Number(value))) : 0;
+        return `${numberFormat.format(area)} m²`;
+    }
+
+    function formatCoveragePercent(value) {
+        const percent = Number.isFinite(Number(value)) ? Math.max(0, Number(value)) : 0;
+        if (percent > 0 && percent < 0.0001) return '< 0,0001 %';
+        const maximumFractionDigits = percent >= 10 ? 1 : percent >= 1 ? 2 : percent >= 0.01 ? 3 : 4;
+        return `${percent.toLocaleString('da-DK', { minimumFractionDigits: percent === 0 ? 0 : 1, maximumFractionDigits })} %`;
     }
 
     function renderBranchChart(target, branches, maximum = branches[0]?.jobs || 1, loading = false, error = null) {
