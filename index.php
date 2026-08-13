@@ -139,8 +139,8 @@ $isGoogle = $config['variant'] === 'google';
                         <article class="metric-card"><span class="metric-label">A · Arbejdsmarkedsbyer nået</span><strong id="metric-cities">—</strong></article>
                         <article class="metric-card"><span class="metric-label">A · Største nåede by</span><strong id="metric-largest" class="metric-name">—</strong></article>
                     </section>
+                    <details class="sub-fold municipality-fold" open><summary>Job fordelt på kommuner <span>byer / øvrigt / udenfor</span></summary><div id="municipality-breakdown" class="municipality-breakdown"><p class="empty-state">Venter på kommunetal…</p></div></details>
                     <details class="sub-fold" open><summary>Største brancher <span>anslåede job</span></summary><div id="branch-chart" class="branch-chart"><p class="empty-state">Venter på jobtal…</p></div></details>
-                    <details class="sub-fold"><summary>Kommuner i zonen <span>by / land</span></summary><div id="municipality-breakdown" class="municipality-breakdown"><p class="empty-state">Venter på kommunetal…</p></div></details>
                 </div>
             </details>
 
@@ -155,15 +155,15 @@ $isGoogle = $config['variant'] === 'google';
                                 <div><span><?= $label ?> · Arbejdssteder</span><strong id="compare-<?= $key ?>-workplaces">—</strong></div>
                                 <div><span><?= $label ?> · Byer nået</span><strong id="compare-<?= $key ?>-cities">—</strong></div>
                             </div>
+                            <details class="comparison-municipality-fold" open><summary><?= $label ?> · Job fordelt på kommuner <span>byer / øvrigt / udenfor</span></summary><div id="compare-<?= $key ?>-municipalities" class="municipality-breakdown"><p class="empty-state">Vælg by…</p></div></details>
                             <h3><?= $label ?> · Største brancher</h3><div id="compare-<?= $key ?>-branches" class="branch-chart"><p class="empty-state">Vælg by…</p></div>
-                            <details class="comparison-municipality-fold"><summary><?= $label ?> · Kommuner i zonen <span>by / land</span></summary><div id="compare-<?= $key ?>-municipalities" class="municipality-breakdown"><p class="empty-state">Vælg by…</p></div></details>
                         </article>
                     <?php endforeach; ?>
                 </section>
                 <div id="comparison-branches-compact" class="comparison-branches-compact" aria-label="Sammenligning af brancher"></div>
             </details>
 
-            <details id="cities-section" class="fold-card" hidden open>
+            <details id="cities-section" class="fold-card" hidden>
                 <summary>Byer efter køretid <span id="cities-context">fra valgt udgangspunkt</span></summary>
                 <div id="city-list" class="city-list"><p class="empty-state">Vælg en by…</p></div>
             </details>

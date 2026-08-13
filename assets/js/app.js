@@ -299,7 +299,7 @@
     function applyMobileDisclosureDefaults() {
         if (state.mobileDisclosureApplied || !window.matchMedia('(max-width: 700px)').matches) return;
         state.mobileDisclosureApplied = true;
-        document.querySelectorAll('#single-results .sub-fold, #cities-section').forEach((details) => details.removeAttribute('open'));
+        document.querySelectorAll('#single-results .sub-fold:not(.municipality-fold), #cities-section').forEach((details) => details.removeAttribute('open'));
     }
 
     function resetScenarioOrigin(scenario, originId) {
@@ -539,7 +539,6 @@
         const coverage = {};
         const branchTotals = new Map();
         const municipalityBreakdown = [];
-        let jobs = 0;
         let workplaces = 0;
         let hasJobs = false;
         let hasWorkplaces = false;
@@ -547,9 +546,8 @@
         Object.entries(state.municipalities).forEach(([code, municipality]) => {
             const settlements = state.settlementsByMunicipality.get(code) || [];
             const totalPopulation = settlements.reduce((sum, settlement) => sum + settlement.population, 0);
-            const coveredPopulation = settlements
-                .filter((settlement) => pointInZone(settlement.lon, settlement.lat, scenario.geojson))
-                .reduce((sum, settlement) => sum + settlement.population, 0);
+            const coveredSettlements = settlements.filter((settlement) => pointInZone(settlement.lon, settlement.lat, scenario.geojson));
+            const coveredPopulation = coveredSettlements.reduce((sum, settlement) => sum + settlement.population, 0);
             const urbanCoverage = totalPopulation > 0 ? coveredPopulation / totalPopulation : 0;
             const ruralCoverage = polygonCoverage(state.municipalityBoundaries.get(code), scenario.geojson);
             const urbanFactor = state.geography.weights.urban * urbanCoverage;
@@ -564,19 +562,46 @@
             const urbanWorkplaces = Number.isFinite(municipality.workplaces) ? municipality.workplaces * urbanFactor : null;
             const ruralWorkplaces = Number.isFinite(municipality.workplaces) ? municipality.workplaces * ruralFactor : null;
             coverage[code] = { factor, urbanCoverage, ruralCoverage, urbanFactor, ruralFactor };
-            if ((urbanJobs || 0) + (ruralJobs || 0) >= 1) {
+            if ((ruralCoverage > 0 || coveredSettlements.length > 0) && Number.isFinite(municipality.jobs)) {
+                const totalJobs = Math.round(municipality.jobs);
+                const urbanBudget = Math.max(0, Math.round(urbanJobs || 0));
+                const cityJobs = coveredSettlements
+                    .map((settlement) => ({
+                        name: settlement.name,
+                        rawJobs: totalPopulation > 0
+                            ? municipality.jobs * state.geography.weights.urban * settlement.population / totalPopulation
+                            : 0,
+                    }))
+                    .map((settlement) => ({ ...settlement, jobs: Math.floor(settlement.rawJobs), fraction: settlement.rawJobs % 1 }))
+                    .sort((a, b) => b.fraction - a.fraction);
+                let urbanRemainder = Math.max(0, urbanBudget - cityJobs.reduce((sum, settlement) => sum + settlement.jobs, 0));
+                cityJobs.forEach((settlement) => {
+                    if (urbanRemainder <= 0) return;
+                    settlement.jobs += 1;
+                    urbanRemainder -= 1;
+                });
+                cityJobs.forEach((settlement) => {
+                    delete settlement.rawJobs;
+                    delete settlement.fraction;
+                });
+                cityJobs.sort((a, b) => b.jobs - a.jobs || a.name.localeCompare(b.name, 'da'));
+                const roundedUrbanJobs = cityJobs.reduce((sum, settlement) => sum + settlement.jobs, 0);
+                const roundedRuralJobs = Math.min(Math.max(0, totalJobs - roundedUrbanJobs), Math.max(0, Math.round(ruralJobs || 0)));
+                const inZoneJobs = roundedUrbanJobs + roundedRuralJobs;
                 municipalityBreakdown.push({
                     code,
                     name: municipality.name,
-                    urbanJobs: urbanJobs === null ? null : Math.round(urbanJobs),
-                    ruralJobs: ruralJobs === null ? null : Math.round(ruralJobs),
+                    cityJobs: cityJobs.filter((settlement) => settlement.jobs > 0),
+                    urbanJobs: roundedUrbanJobs,
+                    ruralJobs: roundedRuralJobs,
                     urbanWorkplaces: urbanWorkplaces === null ? null : Math.round(urbanWorkplaces),
                     ruralWorkplaces: ruralWorkplaces === null ? null : Math.round(ruralWorkplaces),
-                    jobs: urbanJobs === null || ruralJobs === null ? null : Math.round(urbanJobs + ruralJobs),
+                    jobs: inZoneJobs,
+                    outsideJobs: Math.max(0, totalJobs - inZoneJobs),
+                    totalJobs,
                 });
             }
             if (Number.isFinite(municipality.jobs)) {
-                jobs += municipality.jobs * factor;
                 hasJobs = true;
             }
             if (Number.isFinite(municipality.workplaces)) {
@@ -592,7 +617,7 @@
         });
 
         return {
-            jobs: hasJobs ? Math.round(jobs) : null,
+            jobs: hasJobs ? municipalityBreakdown.reduce((sum, municipality) => sum + municipality.jobs, 0) : null,
             workplaces: hasWorkplaces ? Math.round(workplaces) : null,
             branches: [...branchTotals.values()]
                 .map((branch) => ({ ...branch, jobs: Math.round(branch.jobs) }))
@@ -776,20 +801,30 @@
             return;
         }
         if (loading) {
-            target.innerHTML = '<div class="loading-list" role="status"><span></span><span></span><p>Beregner by- og landandele…</p></div>';
+            target.innerHTML = '<div class="loading-list" role="status"><span></span><span></span><p>Beregner kommuner, byer og øvrige arealer…</p></div>';
             return;
         }
         if (!municipalities?.length) {
             target.innerHTML = '<p class="empty-state">Zonen dækker endnu ingen beregnede job.</p>';
             return;
         }
-        target.innerHTML = municipalities.map((municipality) => `
-            <div class="municipality-row">
-                <div><strong>${escapeHtml(municipality.name)}</strong><b>${formatKnown(municipality.jobs)} job</b></div>
-                <span><i>By · 90 %</i><em>${formatKnown(municipality.urbanJobs)} job · ${formatKnown(municipality.urbanWorkplaces)} arbejdssteder</em></span>
-                <span><i>Land · 10 %</i><em>${formatKnown(municipality.ruralJobs)} job · ${formatKnown(municipality.ruralWorkplaces)} arbejdssteder</em></span>
-            </div>
-        `).join('');
+        target.innerHTML = municipalities.map((municipality) => {
+            const total = Math.max(1, municipality.totalJobs || 0);
+            const urbanWidth = (municipality.urbanJobs / total) * 100;
+            const ruralWidth = (municipality.ruralJobs / total) * 100;
+            const outsideWidth = Math.max(0, 100 - urbanWidth - ruralWidth);
+            const cities = municipality.cityJobs.length
+                ? municipality.cityJobs.map((city) => `<span class="municipality-city"><i>${escapeHtml(city.name)}</i><em>${formatKnown(city.jobs)} job</em></span>`).join('')
+                : '<span class="municipality-city is-empty"><i>Ingen registrerede bymidter i zonen</i><em>0 job</em></span>';
+            return `<article class="municipality-row">
+                <div class="municipality-heading"><strong>${escapeHtml(municipality.name)} Kommune</strong><b>${formatKnown(municipality.jobs)} job i zonen</b></div>
+                <div class="municipality-job-bar" aria-label="Fordeling af kommunens anslåede job"><i style="width:${urbanWidth.toFixed(2)}%"></i><i style="width:${ruralWidth.toFixed(2)}%"></i><i style="width:${outsideWidth.toFixed(2)}%"></i></div>
+                <div class="municipality-cities"><small>Byer i zonen · del af 90 %</small>${cities}</div>
+                <span class="municipality-remainder"><i>Øvrigt område i zonen · del af 10 %</i><em>${formatKnown(municipality.ruralJobs)} job</em></span>
+                <span class="municipality-outside"><i>Uden for zonen</i><em>${formatKnown(municipality.outsideJobs)} job</em></span>
+                <footer>I alt i kommunen: ${formatKnown(municipality.totalJobs)} anslåede job</footer>
+            </article>`;
+        }).join('');
     }
 
     function renderBranchChart(target, branches, maximum = branches[0]?.jobs || 1, loading = false, error = null) {
