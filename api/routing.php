@@ -74,6 +74,12 @@ try {
     }
 
     if ($action === 'isochrone') {
+        if ($routingConfig['isochrone_provider'] === 'GoogleIsochrones' && $routingConfig['google_isochrones_api_key'] === '') {
+            app_json_response([
+                'ok' => false,
+                'error' => 'Google-testmiljøet mangler endnu sin server-side Isochrones API-nøgle.',
+            ], 424);
+        }
         $provider = $routingConfig['isochrone_provider'] === 'GoogleIsochrones'
             ? new GoogleIsochronesProvider(
                 $routingConfig['google_isochrones_base_url'],

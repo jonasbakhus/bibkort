@@ -66,4 +66,3 @@ state_tmp="${state_file}.tmp"
 printf '%s\n' "$remote_commit" > "$state_tmp"
 mv "$state_tmp" "$state_file"
 printf '%s Deployed %s to testbibg\n' "$(date -Iseconds)" "$remote_commit"
-

@@ -10,4 +10,3 @@ Require valid-user
     Header always set X-Robots-Tag "noindex, nofollow, noarchive, nosnippet, noimageindex"
     Header always set Cache-Control "private, no-store"
 </IfModule>
-
