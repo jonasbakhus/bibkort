@@ -70,6 +70,7 @@
         singleOriginName: document.getElementById('single-origin-name'),
         mapSizeToggle: document.getElementById('map-size-toggle'),
         comparisonBranchesCompact: document.getElementById('comparison-branches-compact'),
+        comparisonMunicipalities: document.getElementById('comparison-municipalities'),
         compare: {
             primary: comparisonElements('primary'),
             secondary: comparisonElements('secondary'),
@@ -264,8 +265,6 @@
             jobs: document.getElementById(`compare-${key}-jobs`),
             workplaces: document.getElementById(`compare-${key}-workplaces`),
             cities: document.getElementById(`compare-${key}-cities`),
-            branches: document.getElementById(`compare-${key}-branches`),
-            municipalities: document.getElementById(`compare-${key}-municipalities`),
         };
     }
 
@@ -753,10 +752,9 @@
             setValue(target.jobs, result.ready ? formatKnown(result.jobs) : placeholder, !result.ready && !result.error, Boolean(result.error));
             setValue(target.workplaces, result.ready ? formatKnown(result.workplaces) : placeholder, !result.ready && !result.error, Boolean(result.error));
             setValue(target.cities, result.ready ? numberFormat.format(result.reachedCities.length) : placeholder, !result.ready && !result.error, Boolean(result.error));
-            renderBranchChart(target.branches, result.branches, sharedMaximum, !result.ready && !result.error, result.error);
-            renderMunicipalityBreakdown(target.municipalities, result.municipalityBreakdown, !result.ready && !result.error, result.error);
         });
         renderCompactComparisonBranches(primaryResult, secondaryResult, sharedMaximum);
+        renderComparisonMunicipalities(primaryResult, secondaryResult);
         elements.comparisonResults.setAttribute('aria-busy', String(!primaryResult.ready || !secondaryResult.ready));
     }
 
@@ -767,13 +765,10 @@
         setValue(primaryTarget.jobs, primaryResult.ready ? formatKnown(primaryResult.jobs) : placeholder, !primaryResult.ready && !primaryResult.error, Boolean(primaryResult.error));
         setValue(primaryTarget.workplaces, primaryResult.ready ? formatKnown(primaryResult.workplaces) : placeholder, !primaryResult.ready && !primaryResult.error, Boolean(primaryResult.error));
         setValue(primaryTarget.cities, primaryResult.ready ? numberFormat.format(primaryResult.reachedCities.length) : placeholder, !primaryResult.ready && !primaryResult.error, Boolean(primaryResult.error));
-        renderBranchChart(primaryTarget.branches, primaryResult.branches, undefined, !primaryResult.ready && !primaryResult.error, primaryResult.error);
-        renderMunicipalityBreakdown(primaryTarget.municipalities, primaryResult.municipalityBreakdown, !primaryResult.ready && !primaryResult.error, primaryResult.error);
         elements.compare.secondary.name.textContent = 'Vælg udgangspunkt B';
         ['jobs', 'workplaces', 'cities'].forEach((field) => setValue(elements.compare.secondary[field], '—', false));
-        elements.compare.secondary.branches.innerHTML = '<p class="empty-state">Vælg en anden by som B.</p>';
-        elements.compare.secondary.municipalities.innerHTML = '<p class="empty-state">Vælg en anden by som B.</p>';
         elements.comparisonBranchesCompact.innerHTML = '<p class="empty-state">Vælg udgangspunkt B for at sammenligne brancher.</p>';
+        elements.comparisonMunicipalities.innerHTML = '<p class="empty-state">Vælg udgangspunkt B for at sammenligne kommuner.</p>';
         elements.comparisonResults.setAttribute('aria-busy', String(!primaryResult.ready));
     }
 
@@ -799,10 +794,70 @@
         elements.comparisonBranchesCompact.innerHTML = `<h3>Største brancher · A/B</h3>${rows.map((branch) => `
             <div class="compact-branch-row">
                 <strong>${escapeHtml(shortBranchName(branch.name))}</strong>
-                <div class="compact-branch-value"><b>A</b><span class="branch-track"><i style="width:${Math.max(3, (branch.primary / maximum) * 100).toFixed(1)}%"></i></span><em>${numberFormat.format(branch.primary)}</em></div>
-                <div class="compact-branch-value is-secondary"><b>B</b><span class="branch-track"><i style="width:${Math.max(3, (branch.secondary / maximum) * 100).toFixed(1)}%"></i></span><em>${numberFormat.format(branch.secondary)}</em></div>
+                <div class="compact-comparison-values">
+                    <div class="compact-branch-value"><b>A</b><span class="branch-track"><i style="width:${comparisonWidth(branch.primary, maximum)}%"></i></span><em>${numberFormat.format(branch.primary)}</em></div>
+                    <div class="compact-branch-value is-secondary"><b>B</b><span class="branch-track"><i style="width:${comparisonWidth(branch.secondary, maximum)}%"></i></span><em>${numberFormat.format(branch.secondary)}</em></div>
+                </div>
             </div>
         `).join('')}`;
+    }
+
+    function renderComparisonMunicipalities(primaryResult, secondaryResult) {
+        if (primaryResult.error || secondaryResult.error) {
+            elements.comparisonMunicipalities.innerHTML = '<p class="empty-state is-error">Kommunetallene kunne ikke beregnes.</p>';
+            return;
+        }
+        if (!primaryResult.ready || !secondaryResult.ready) {
+            elements.comparisonMunicipalities.innerHTML = '<div class="loading-list" role="status"><span></span><span></span><p>Beregner A/B-kommuner…</p></div>';
+            return;
+        }
+        const rows = new Map();
+        primaryResult.municipalityBreakdown.forEach((municipality) => rows.set(municipality.code, { code: municipality.code, name: municipality.name, primary: municipality, secondary: null }));
+        secondaryResult.municipalityBreakdown.forEach((municipality) => {
+            const row = rows.get(municipality.code) || { code: municipality.code, name: municipality.name, primary: null, secondary: null };
+            row.secondary = municipality;
+            rows.set(municipality.code, row);
+        });
+        const municipalities = [...rows.values()]
+            .map((row) => ({
+                ...row,
+                primary: row.primary || emptyMunicipalityBreakdown(row.code, row.name),
+                secondary: row.secondary || emptyMunicipalityBreakdown(row.code, row.name),
+            }))
+            .sort((a, b) => Math.max(b.primary.jobs, b.secondary.jobs) - Math.max(a.primary.jobs, a.secondary.jobs));
+        if (!municipalities.length) {
+            elements.comparisonMunicipalities.innerHTML = '<p class="empty-state">Zonerne overlapper endnu ingen beregnede kommuner.</p>';
+            return;
+        }
+        const maximum = Math.max(1, ...municipalities.flatMap((row) => [row.primary.jobs, row.secondary.jobs]));
+        const primaryName = state.scenarios.primary.origin.name;
+        const secondaryName = state.scenarios.secondary.origin.name;
+        elements.comparisonMunicipalities.innerHTML = `<h3>Job fordelt på kommuner · A/B</h3>${municipalities.map((row) => `
+            <details class="comparison-municipality-row">
+                <summary>
+                    <strong>${escapeHtml(row.name)} Kommune</strong>
+                    <span class="compact-comparison-values">
+                        <span class="compact-branch-value"><b>A</b><span class="branch-track"><i style="width:${comparisonWidth(row.primary.jobs, maximum)}%"></i></span><em>${formatKnown(row.primary.jobs)}</em></span>
+                        <span class="compact-branch-value is-secondary"><b>B</b><span class="branch-track"><i style="width:${comparisonWidth(row.secondary.jobs, maximum)}%"></i></span><em>${formatKnown(row.secondary.jobs)}</em></span>
+                    </span>
+                </summary>
+                <div class="comparison-municipality-details">
+                    <section><h4><b>A</b>${escapeHtml(primaryName)}</h4>${municipalityCardHtml(row.primary)}</section>
+                    <section class="is-secondary"><h4><b>B</b>${escapeHtml(secondaryName)}</h4>${municipalityCardHtml(row.secondary)}</section>
+                </div>
+            </details>
+        `).join('')}`;
+    }
+
+    function emptyMunicipalityBreakdown(code, name) {
+        const municipality = state.municipalities[code];
+        const totalJobs = Math.round(municipality?.jobs || 0);
+        return { code, name: municipality?.name || name, cityJobs: [], urbanJobs: 0, ruralJobs: 0, jobs: 0, outsideJobs: totalJobs, totalJobs };
+    }
+
+    function comparisonWidth(value, maximum) {
+        if (!value || maximum <= 0) return '0.0';
+        return Math.max(3, (value / maximum) * 100).toFixed(1);
     }
 
     function renderMunicipalityBreakdown(target, municipalities, loading = false, error = null) {
@@ -818,7 +873,10 @@
             target.innerHTML = '<p class="empty-state">Zonen dækker endnu ingen beregnede job.</p>';
             return;
         }
-        target.innerHTML = municipalities.map((municipality) => {
+        target.innerHTML = municipalities.map(municipalityCardHtml).join('');
+    }
+
+    function municipalityCardHtml(municipality) {
             const total = Math.max(1, municipality.totalJobs || 0);
             const urbanWidth = (municipality.urbanJobs / total) * 100;
             const ruralWidth = (municipality.ruralJobs / total) * 100;
@@ -834,7 +892,6 @@
                 <span class="municipality-outside"><i>Uden for zonen</i><em>${formatKnown(municipality.outsideJobs)} job</em></span>
                 <footer>I alt i kommunen: ${formatKnown(municipality.totalJobs)} anslåede job</footer>
             </article>`;
-        }).join('');
     }
 
     function renderBranchChart(target, branches, maximum = branches[0]?.jobs || 1, loading = false, error = null) {

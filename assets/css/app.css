@@ -262,19 +262,39 @@ body.is-map-expanded .map-expanded-time-control .range-labels { margin-top: -2px
 .compare-badge { display: inline-grid; place-items: center; width: 25px; height: 25px; border-radius: 7px; background: var(--accent); color: white; font-size: .72rem; }
 .comparison-column.is-secondary .compare-badge { background: var(--compare); }
 .comparison-column.is-secondary h2 i { background: var(--compare); }
-.comparison-column h3 { margin: 18px 0 10px; font-size: 0.78rem; }
-.comparison-municipality-fold { margin-top: 14px; border-top: 1px solid var(--line); }
-.comparison-municipality-fold > summary { display: flex; justify-content: space-between; gap: 8px; padding: 11px 0 7px; color: var(--ink); font-size: .7rem; font-weight: 800; cursor: pointer; }
-.comparison-municipality-fold > summary span { color: var(--ink-soft); font-size: .62rem; font-weight: 600; }
-.comparison-municipality-fold > summary::marker { color: var(--accent); }
 .comparison-metrics { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
 .comparison-metrics > div { min-width: 0; padding: 9px; border-radius: 9px; background: #f2f6f5; }
 .comparison-column.is-secondary .comparison-metrics > div { background: var(--compare-pale); }
 .comparison-metrics span { display: block; min-height: 28px; color: var(--ink-soft); font-size: 0.6rem; line-height: 1.2; }
 .comparison-metrics strong { display: block; margin-top: 3px; font-size: 1rem; line-height: 1; }
-.comparison-column .branch-meta { font-size: 0.64rem; }
-.comparison-column.is-secondary .branch-track span { background: linear-gradient(90deg, #5140b8, #8776e6); }
-.comparison-branches-compact { display: none; }
+.comparison-branches-compact, .comparison-municipalities-combined { margin: 0 12px 12px; padding: 13px; border: 1px solid var(--line); border-radius: 12px; background: #fff; }
+.comparison-branches-compact > h3, .comparison-municipalities-combined > h3 { margin: 0 0 11px; font-size: .82rem; }
+.compact-branch-row + .compact-branch-row { margin-top: 13px; }
+.compact-branch-row > strong { display: block; margin-bottom: 6px; font-size: .72rem; line-height: 1.25; }
+.compact-comparison-values { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; min-width: 0; }
+.compact-branch-value { display: grid; grid-template-columns: 18px minmax(0, 1fr) 56px; align-items: center; gap: 6px; min-width: 0; min-height: 18px; }
+.compact-branch-value b { display: grid; width: 17px; height: 17px; place-items: center; border-radius: 5px; background: var(--accent); color: #fff; font-size: .58rem; }
+.compact-branch-value.is-secondary b { background: var(--compare); }
+.compact-branch-value em { color: var(--ink-soft); font-size: .65rem; font-style: normal; font-variant-numeric: tabular-nums; text-align: right; }
+.compact-branch-value .branch-track i { display: block; height: 100%; border-radius: inherit; background: linear-gradient(90deg, var(--accent-dark), #35a295); }
+.compact-branch-value.is-secondary .branch-track i { background: linear-gradient(90deg, #5140b8, #8776e6); }
+.comparison-municipality-row { border-top: 1px solid var(--line); }
+.comparison-municipality-row > summary { display: grid; gap: 7px; padding: 11px 0; list-style: none; cursor: pointer; }
+.comparison-municipality-row > summary::-webkit-details-marker { display: none; }
+.comparison-municipality-row > summary > strong { display: flex; justify-content: space-between; gap: 10px; font-size: .72rem; }
+.comparison-municipality-row > summary > strong::after { content: "Vis detaljer +"; color: var(--ink-soft); font-size: .58rem; font-weight: 650; }
+.comparison-municipality-row[open] > summary > strong::after { content: "Skjul detaljer −"; }
+.comparison-municipality-details { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; padding: 2px 0 12px; }
+.comparison-municipality-details > section { min-width: 0; padding: 8px; border-radius: 10px; background: #f6faf9; }
+.comparison-municipality-details > section.is-secondary { background: #f8f7ff; }
+.comparison-municipality-details h4 { display: flex; align-items: center; gap: 6px; margin: 0 0 7px; font-size: .67rem; }
+.comparison-municipality-details h4 b { display: grid; width: 18px; height: 18px; place-items: center; border-radius: 5px; background: var(--accent); color: #fff; font-size: .58rem; }
+.comparison-municipality-details .is-secondary h4 b { background: var(--compare); }
+.comparison-municipality-details .municipality-row { padding: 9px; }
+.comparison-municipality-details .is-secondary .municipality-heading b { color: #5140b8; }
+.comparison-municipality-details .is-secondary .municipality-job-bar i:first-child { background: var(--compare); }
+.comparison-municipality-details .is-secondary .municipality-job-bar i:nth-child(2) { background: #a99ce8; }
+.comparison-municipality-details .is-secondary .municipality-city i::before { background: var(--compare); }
 .section-heading { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
 .section-heading h2, .method-note h2 { margin: 0; font-size: 0.98rem; letter-spacing: -0.01em; }
 .section-heading span { color: var(--ink-soft); font-size: 0.7rem; }
@@ -524,17 +544,8 @@ noscript { display: block; padding: 20px; background: #fff3cd; }
     .map-legend { right: 10px; gap: 7px 12px; }
     .origin-control-heading { align-items: center; }
     .comparison-results { grid-template-columns: 1fr; }
-    .comparison-column > h3, .comparison-column > .branch-chart { display: none; }
-    .comparison-branches-compact { display: block; margin: 0 12px 12px; padding: 13px; border: 1px solid var(--line); border-radius: 12px; background: #fff; }
-    .comparison-branches-compact > h3 { margin: 0 0 11px; font-size: .82rem; }
-    .compact-branch-row + .compact-branch-row { margin-top: 12px; }
-    .compact-branch-row > strong { display: block; margin-bottom: 5px; font-size: .7rem; line-height: 1.25; }
-    .compact-branch-value { display: grid; grid-template-columns: 18px minmax(0, 1fr) 52px; align-items: center; gap: 6px; min-height: 18px; }
-    .compact-branch-value b { display: grid; width: 17px; height: 17px; place-items: center; border-radius: 5px; background: var(--accent); color: #fff; font-size: .58rem; }
-    .compact-branch-value.is-secondary b { background: var(--compare); }
-    .compact-branch-value em { color: var(--ink-soft); font-size: .65rem; font-style: normal; font-variant-numeric: tabular-nums; text-align: right; }
-    .compact-branch-value .branch-track i { display: block; height: 100%; border-radius: inherit; background: linear-gradient(90deg, var(--accent-dark), #35a295); }
-    .compact-branch-value.is-secondary .branch-track i { background: linear-gradient(90deg, #5140b8, #8776e6); }
+    .compact-comparison-values, .comparison-municipality-details { grid-template-columns: 1fr; gap: 5px; }
+    .comparison-municipality-details { gap: 9px; }
     .city-touch-target { width: 50px !important; height: 50px !important; margin-left: -25px !important; margin-top: -25px !important; }
     .fold-card > summary { position: sticky; top: 0; z-index: 1; background: #fff; }
     .metrics { gap: 7px; }

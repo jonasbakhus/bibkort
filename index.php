@@ -155,12 +155,11 @@ $isGoogle = $config['variant'] === 'google';
                                 <div><span><?= $label ?> · Arbejdssteder</span><strong id="compare-<?= $key ?>-workplaces">—</strong></div>
                                 <div><span><?= $label ?> · Byer nået</span><strong id="compare-<?= $key ?>-cities">—</strong></div>
                             </div>
-                            <details class="comparison-municipality-fold" open><summary><?= $label ?> · Job fordelt på kommuner <span>byer / øvrigt / udenfor</span></summary><div id="compare-<?= $key ?>-municipalities" class="municipality-breakdown"><p class="empty-state">Vælg by…</p></div></details>
-                            <h3><?= $label ?> · Største brancher</h3><div id="compare-<?= $key ?>-branches" class="branch-chart"><p class="empty-state">Vælg by…</p></div>
                         </article>
                     <?php endforeach; ?>
                 </section>
                 <div id="comparison-branches-compact" class="comparison-branches-compact" aria-label="Sammenligning af brancher"></div>
+                <div id="comparison-municipalities" class="comparison-municipalities-combined" aria-label="Sammenligning af kommuner"></div>
             </details>
 
             <details id="cities-section" class="fold-card" hidden>
