@@ -37,6 +37,8 @@
     const elements = {
         slider: document.getElementById('time-slider'),
         output: document.getElementById('time-output'),
+        mapSlider: document.getElementById('map-time-slider'),
+        mapOutput: document.getElementById('map-time-output'),
         reached: document.getElementById('reached-summary'),
         status: document.getElementById('data-status'),
         jobs: document.getElementById('metric-jobs'),
@@ -132,6 +134,7 @@
     elements.slider.max = config.slider.max;
     elements.slider.step = config.slider.step;
     elements.slider.value = state.minutes;
+    elements.mapSlider.value = state.minutes;
     elements.primarySelect.value = state.scenarios.primary.originId || '';
     elements.secondarySelect.value = state.scenarios.secondary.originId || '';
     applyComparisonMode();
@@ -173,6 +176,10 @@
             loadIsochrone(state.scenarios.primary, requestedMinutes);
             if (state.comparing && state.scenarios.secondary.origin) loadIsochrone(state.scenarios.secondary, requestedMinutes);
         }, 220);
+    });
+    elements.mapSlider.addEventListener('input', () => {
+        elements.slider.value = elements.mapSlider.value;
+        elements.slider.dispatchEvent(new Event('input', { bubbles: true }));
     });
 
     if (state.scenarios.primary.origin) {
@@ -428,6 +435,7 @@
         const hasPrimary = Boolean(primary.origin);
         const hasSecondary = Boolean(secondary.origin);
         elements.slider.disabled = !hasPrimary;
+        elements.mapSlider.disabled = !hasPrimary;
         elements.compareToggle.disabled = !hasPrimary;
         elements.selectionPrompt.hidden = hasPrimary;
         elements.status.hidden = !hasPrimary;
@@ -447,6 +455,8 @@
 
         elements.output.value = `${state.minutes} minutter`;
         elements.output.textContent = `${state.minutes} minutter`;
+        elements.mapOutput.value = `${state.minutes} minutter`;
+        elements.mapOutput.textContent = `${state.minutes} minutter`;
         elements.singleOriginName.textContent = `A · ${primary.origin.name}`;
         elements.originIntro.textContent = state.comparing && hasSecondary
             ? `Sammenlign arbejdsmarkedsoplandet fra ${primary.origin.name} og ${secondary.origin.name}.`
@@ -964,6 +974,10 @@
     function updateSliderProgress() {
         const progress = ((state.minutes - config.slider.min) / (config.slider.max - config.slider.min)) * 100;
         elements.slider.style.setProperty('--progress', `${progress}%`);
+        elements.mapSlider.value = state.minutes;
+        elements.mapSlider.style.setProperty('--progress', `${progress}%`);
+        elements.mapOutput.value = `${state.minutes} minutter`;
+        elements.mapOutput.textContent = `${state.minutes} minutter`;
     }
 
     function originIcon(name, key) {

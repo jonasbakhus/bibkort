@@ -61,6 +61,11 @@ $isGoogle = $config['variant'] === 'google';
                     <span class="map-size-icon" aria-hidden="true"></span><span>Udvid kort</span>
                 </button>
             </div>
+            <section class="map-expanded-time-control" aria-label="Køretid på det udvidede kort">
+                <div><span>Maksimal køretid</span><output id="map-time-output" for="map-time-slider"><?= (int) $config['slider']['default'] ?> minutter</output></div>
+                <input id="map-time-slider" type="range" min="<?= (int) $config['slider']['min'] ?>" max="<?= (int) $config['slider']['max'] ?>" step="<?= (int) $config['slider']['step'] ?>" value="<?= (int) $config['slider']['default'] ?>" aria-label="Maksimal køretid i minutter på kortet" disabled>
+                <div class="range-labels" aria-hidden="true"><span><?= (int) $config['slider']['min'] ?> min</span><span><?= (int) $config['slider']['max'] ?> min</span></div>
+            </section>
             <div class="map-legend" aria-hidden="true">
                 <span><i class="legend-dot origin-dot"></i><span id="legend-primary">Vælg udgangspunkt A</span></span>
                 <span id="legend-secondary-wrap" hidden><i class="legend-dot secondary-dot"></i><span id="legend-secondary">Vælg B</span></span>
