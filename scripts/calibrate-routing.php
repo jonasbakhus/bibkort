@@ -19,7 +19,9 @@ $google = new GoogleRoutesMatrixClient(
 );
 
 if (in_array('--probe', $argv, true)) {
-    $elements = $google->matrix([$config['origins']['baekmarksbro']], [$config['cities'][0]]);
+    $probeOrigin = array_values($config['origins'])[0];
+    $probeCity = array_values($config['cities'])[0];
+    $elements = $google->matrix([$probeOrigin], [$probeCity]);
     echo json_encode([
         'ok' => count($elements) === 1 && $elements[0]['condition'] === 'ROUTE_EXISTS',
         'provider' => 'GoogleRoutes',

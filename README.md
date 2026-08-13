@@ -1,4 +1,4 @@
-# bibkort
+# Arbejdsmarkedskort for hele Lemvig Kommune
 Et arbejdsmarkedsværktøj for hele Lemvig Kommune, der viser og sammenligner realistiske køretidszoner og modelberegnede joboplande.
 
 Appen er bygget til et almindeligt PHP-webhotel og kræver ingen database, Composer, Node.js eller buildkommando. Alle URL'er er relative, så den kan køre fra eksempelvis `https://bibkort.landogbyforeningen.dk/`.
@@ -10,7 +10,7 @@ Appen er bygget til et almindeligt PHP-webhotel og kræver ingen database, Compo
 - delbare sammenligninger via URL-parameteren `origin`
 - to udgangspunkter kan sammenlignes med hver sin zone, nøgletal og branchegraf
 - TravelTime-isochroner baseret på vejnettet, ikke simple cirkler; Valhalla bruges som lokal fallback uden nøgler
-- byernes start- og slutpunkter følger Google Maps; brugerens præcise punkter for Bækmarksbro og Vilhelmsborgvej er bevaret
+- byernes start- og slutpunkter er fastlagt ensartet og dokumenteret, så ingen by favoriseres i modellen
 - TravelTime er kalibreret pr. udgangspunkt mod en bred Google Routes-matrix med 621 ruter og cirka 22–23 kontrolruter pr. sted
 - faktiske køretider og vejafstande til 14 arbejdsmarkedsbyer
 - servercache af både isochroner, køretidsmatrix og Statistikbank-data
@@ -81,7 +81,7 @@ php -l lib/Routing/ValhallaProvider.php
 Med den lokale server på port 8080:
 
 - hovedside: <http://localhost:8080/>
-- køretidsmatrix: <http://localhost:8080/api/routing.php?action=matrix&origin=baekmarksbro>
+- køretidsmatrix: <http://localhost:8080/api/routing.php?action=matrix&origin=lemvig>
 - 45-minutters isochrone: <http://localhost:8080/api/routing.php?action=isochrone&minutes=45&origin=thyboroen>
 - seneste ERHV2-tal: <http://localhost:8080/api/statbank.php>
 - byområder og kommunegrænser: <http://localhost:8080/api/geography.php>
@@ -94,7 +94,7 @@ Et gyldigt API-svar har `"ok": true`. Routing-svar oplyser provider og cachestat
 2. Vælg PHP 8.0 eller nyere i Simply-kontrolpanelet.
 3. Opret `config/secrets.php` ud fra `config/secrets.example.php`, og indsæt TravelTime Application ID og Application Key. Filen bliver liggende ved senere Git-udrulninger.
 4. Kontrollér, at webserverens PHP-bruger kan skrive i `cache/`.
-5. Åbn `/api/statbank.php`, `/api/geography.php` og `/api/routing.php?action=matrix&origin=baekmarksbro` for at varme og kontrollere cachen. Routing-svaret skal vise `"provider":"TravelTime"`.
+5. Åbn `/api/statbank.php`, `/api/geography.php` og `/api/routing.php?action=matrix&origin=lemvig` for at varme og kontrollere cachen. Routing-svaret skal vise `"provider":"TravelTime"`.
 6. Åbn subdomænets forside.
 
 Der skal ikke køres Composer, npm eller andre buildtrin på serveren. `cache/.htaccess` forhindrer direkte webadgang til cachefiler på Apache-kompatible webhoteller.

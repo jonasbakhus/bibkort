@@ -78,7 +78,7 @@ Opret `config/secrets.php` separat i både `~/testbibkort` og `~/bibkort`. Brug 
 Udrulningskommandoen ovenfor sletter ikke filen, så den skal kun oprettes første gang. Kontrollér bagefter:
 
 ```text
-https://testbibkort.landogbyforeningen.dk/api/routing.php?action=matrix&origin=baekmarksbro
+https://testbibkort.landogbyforeningen.dk/api/routing.php?action=matrix&origin=lemvig
 ```
 
 Svaret skal indeholde `"provider":"TravelTime"`.
