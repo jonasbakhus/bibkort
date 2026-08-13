@@ -50,16 +50,23 @@ function app_fetch_analysis_geography(array $config): array
         ];
     }
 
-    $query = http_build_query([
-        'valuePresentation' => 'Code',
-        'BYER' => implode(',', array_keys($selectedAreas)),
-        'FOLKARTAET' => 'FOLKETAL',
-        'Tid' => (string) $latestYear,
-    ], '', '&', PHP_QUERY_RFC3986);
-    $query = str_replace('%2C', ',', $query);
-    $populationRows = app_parse_semicolon_csv(
-        app_http_get('https://api.statbank.dk/v1/data/' . rawurlencode($table) . '/CSV?' . $query, 45)
-    );
+    $populationRows = [];
+    // Statistikbankens GET-endpoint returnerer 404 ved meget lange URL'er, så byområderne hentes i blokke.
+    foreach (array_chunk(array_keys($selectedAreas), 75) as $areaChunk) {
+        $query = http_build_query([
+            'valuePresentation' => 'Code',
+            'BYER' => implode(',', $areaChunk),
+            'FOLKARTAET' => 'FOLKETAL',
+            'Tid' => (string) $latestYear,
+        ], '', '&', PHP_QUERY_RFC3986);
+        $query = str_replace('%2C', ',', $query);
+        $populationRows = array_merge(
+            $populationRows,
+            app_parse_semicolon_csv(
+                app_http_get('https://api.statbank.dk/v1/data/' . rawurlencode($table) . '/CSV?' . $query, 45)
+            )
+        );
+    }
     $populationByArea = [];
     foreach ($populationRows as $row) {
         $value = str_replace(',', '.', trim((string) ($row['INDHOLD'] ?? '')));

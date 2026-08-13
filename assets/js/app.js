@@ -603,6 +603,7 @@
         elements.comparisonResults.hidden = !state.comparing;
         elements.compareToggle.setAttribute('aria-pressed', String(state.comparing));
         elements.compareToggle.textContent = state.comparing ? 'Luk sammenligning' : 'Sammenlign';
+        window.setTimeout(() => map.invalidateSize(), 0);
     }
 
     function updateMapLoading() {
