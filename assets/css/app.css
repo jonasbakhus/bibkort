@@ -369,8 +369,8 @@ body.is-comparing #origin-primary { border-color: #62b9ae; box-shadow: 0 0 0 2px
 .map-loading.is-prompt::before { display: none; }
 
 .origin-marker-wrap { overflow: visible !important; }
-.origin-marker { position: absolute; inset: 2px; border: 3px solid white; border-radius: 50%; background: #e3553f; box-shadow: 0 2px 6px rgb(77 31 24 / 40%); }
-.origin-pulse { position: absolute; inset: -6px; border: 2px solid rgb(227 85 63 / 52%); border-radius: 50%; animation: origin-pulse 2.4s ease-out infinite; }
+.origin-marker { position: absolute; inset: 2px; border: 3px solid white; border-radius: 50%; background: #e3553f; box-shadow: 0 0 0 4px rgb(15 118 110 / 18%), 0 2px 7px rgb(77 31 24 / 48%); }
+.origin-pulse { position: absolute; inset: -8px; border: 3px solid rgb(15 118 110 / 78%); border-radius: 50%; box-shadow: 0 0 0 4px rgb(15 118 110 / 16%); animation: origin-pulse 1.7s ease-out infinite; }
 .origin-label {
     position: absolute;
     left: 23px;
@@ -385,10 +385,11 @@ body.is-comparing #origin-primary { border-color: #62b9ae; box-shadow: 0 0 0 2px
     box-shadow: 0 2px 7px rgb(25 49 63 / 22%);
 }
 .origin-marker-wrap.is-secondary .origin-marker { background: var(--compare); }
-.origin-marker-wrap.is-secondary .origin-pulse { border-color: rgb(109 91 208 / 52%); }
+.origin-marker-wrap.is-secondary .origin-marker { box-shadow: 0 0 0 4px rgb(109 91 208 / 20%), 0 2px 7px rgb(55 40 130 / 45%); }
+.origin-marker-wrap.is-secondary .origin-pulse { border-color: rgb(109 91 208 / 82%); box-shadow: 0 0 0 4px rgb(109 91 208 / 18%); }
 .origin-marker-wrap.is-secondary .origin-label { background: #5140b8; }
 .origin-marker-wrap:not(.is-secondary) .origin-label { border: 2px solid #4db7a8; padding: 2px 6px; }
-@keyframes origin-pulse { from { transform: scale(0.65); opacity: 1; } to { transform: scale(1.45); opacity: 0; } }
+@keyframes origin-pulse { from { transform: scale(0.55); opacity: 1; } 70% { opacity: .42; } to { transform: scale(1.85); opacity: 0; } }
 @keyframes loading-spin { to { transform: rotate(360deg); } }
 @keyframes loading-shimmer { from { background-position: 100% 0; } to { background-position: -100% 0; } }
 
