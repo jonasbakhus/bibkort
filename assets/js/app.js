@@ -6,6 +6,8 @@
 
     const config = JSON.parse(configElement.textContent);
     const CITY_LABEL_MIN_ZOOM = 11;
+    const RURAL_TAIL_MIN_COVERAGE = 0.95;
+    const RURAL_TAIL_MAX_JOBS = 100;
     const params = new URLSearchParams(window.location.search);
     const primaryId = validOrigin(params.get('origin')) ? params.get('origin') : null;
     let secondaryId = primaryId && validOrigin(params.get('compare')) ? params.get('compare') : null;
@@ -564,8 +566,17 @@
             const urbanCoverage = totalPopulation > 0 ? coveredPopulation / totalPopulation : 0;
             const ruralGeography = polygonCoverageMetrics(state.municipalityBoundaries.get(code), scenario.geojson);
             const ruralCoverage = ruralGeography.fraction;
+            const uncoveredRuralJobs = Number.isFinite(municipality.jobs)
+                ? municipality.jobs * state.geography.weights.rural * (1 - ruralCoverage)
+                : null;
+            const ruralTailAdjusted = settlements.length > 0
+                && coveredSettlements.length === settlements.length
+                && ruralCoverage >= RURAL_TAIL_MIN_COVERAGE
+                && uncoveredRuralJobs > 0
+                && uncoveredRuralJobs < RURAL_TAIL_MAX_JOBS;
+            const effectiveRuralCoverage = ruralTailAdjusted ? 1 : ruralCoverage;
             const urbanFactor = state.geography.weights.urban * urbanCoverage;
-            const ruralFactor = state.geography.weights.rural * ruralCoverage;
+            const ruralFactor = state.geography.weights.rural * effectiveRuralCoverage;
             const factor = clamp(
                 urbanFactor + ruralFactor,
                 0,
@@ -579,8 +590,11 @@
                 factor,
                 urbanCoverage,
                 ruralCoverage,
+                effectiveRuralCoverage,
                 urbanFactor,
                 ruralFactor,
+                ruralTailAdjusted,
+                uncoveredRuralJobs,
                 overlapAreaM2: ruralGeography.overlapAreaM2,
                 municipalityAreaM2: ruralGeography.municipalityAreaM2,
             };
@@ -609,6 +623,10 @@
                 cityJobs.sort((a, b) => b.jobs - a.jobs || a.name.localeCompare(b.name, 'da'));
                 const roundedUrbanJobs = cityJobs.reduce((sum, settlement) => sum + settlement.jobs, 0);
                 const roundedRuralJobs = Math.min(Math.max(0, totalJobs - roundedUrbanJobs), Math.max(0, Math.round(ruralJobs || 0)));
+                const rawRoundedRuralJobs = Math.min(
+                    Math.max(0, totalJobs - roundedUrbanJobs),
+                    Math.max(0, Math.round(municipality.jobs * state.geography.weights.rural * ruralCoverage))
+                );
                 const inZoneJobs = roundedUrbanJobs + roundedRuralJobs;
                 municipalityBreakdown.push({
                     code,
@@ -624,6 +642,8 @@
                     overlapAreaM2: ruralGeography.overlapAreaM2,
                     municipalityAreaM2: ruralGeography.municipalityAreaM2,
                     overlapPercent: ruralCoverage * 100,
+                    ruralTailAdjusted,
+                    adjustedRuralJobs: Math.max(0, roundedRuralJobs - rawRoundedRuralJobs),
                 });
             }
             if (Number.isFinite(municipality.jobs)) {
@@ -916,6 +936,8 @@
             overlapAreaM2: 0,
             municipalityAreaM2,
             overlapPercent: 0,
+            ruralTailAdjusted: false,
+            adjustedRuralJobs: 0,
         };
     }
 
@@ -948,10 +970,14 @@
             const cities = municipality.cityJobs.length
                 ? municipality.cityJobs.map((city) => `<span class="municipality-city"><i>${escapeHtml(city.name)}</i><em>${formatKnown(city.jobs)} job</em></span>`).join('')
                 : '<span class="municipality-city is-empty"><i>Ingen registrerede bymidter i zonen</i><em>0 job</em></span>';
+            const adjustment = municipality.ruralTailAdjusted
+                ? `<span class="municipality-adjustment" title="Restreglen anvendes kun, når alle registrerede bypunkter i kommunen nås, mindst 95 % af kommunearealet overlapper zonen, og den beregnede rest af 10 %-puljen er under 100 job."><i>Lille restpulje medregnet · alle bypunkter nås</i><em>+${formatKnown(municipality.adjustedRuralJobs)} job</em></span>`
+                : '';
             return `<article class="municipality-row">
                 <div class="municipality-heading"><strong>${escapeHtml(municipality.name)} Kommune</strong><b>${formatKnown(municipality.jobs)} job i zonen</b></div>
                 <div class="municipality-job-bar" aria-label="Fordeling af kommunens anslåede job"><i style="width:${urbanWidth.toFixed(2)}%"></i><i style="width:${ruralWidth.toFixed(2)}%"></i><i style="width:${outsideWidth.toFixed(2)}%"></i></div>
                 <span class="municipality-overlap" title="Det geografiske overlap bruges til at fordele kommunens 10 %-pulje for job uden for byerne."><i>Geografisk overlap · grundlag for 10 %-puljen</i><em>${formatSquareMetres(municipality.overlapAreaM2)} · ${formatCoveragePercent(municipality.overlapPercent)} af kommunen</em></span>
+                ${adjustment}
                 <div class="municipality-cities"><small>Byer i zonen · del af 90 %</small>${cities}</div>
                 <span class="municipality-remainder"><i>Øvrigt område i zonen · del af 10 %</i><em>${formatKnown(municipality.ruralJobs)} job</em></span>
                 <span class="municipality-outside"><i>Uden for zonen</i><em>${formatKnown(municipality.outsideJobs)} job</em></span>
