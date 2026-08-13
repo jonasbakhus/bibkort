@@ -6,13 +6,13 @@
 
     const config = JSON.parse(configElement.textContent);
     const params = new URLSearchParams(window.location.search);
-    const primaryId = validOrigin(params.get('origin')) ? params.get('origin') : config.defaultOrigin;
-    let secondaryId = validOrigin(params.get('compare')) ? params.get('compare') : config.comparisonOrigin;
-    if (secondaryId === primaryId) secondaryId = firstOtherOrigin(primaryId);
+    const primaryId = validOrigin(params.get('origin')) ? params.get('origin') : null;
+    let secondaryId = primaryId && validOrigin(params.get('compare')) ? params.get('compare') : null;
+    if (secondaryId === primaryId) secondaryId = null;
 
     const state = {
         minutes: config.slider.default,
-        comparing: validOrigin(params.get('compare')),
+        comparing: Boolean(primaryId && secondaryId),
         municipalities: {},
         statsYear: null,
         statsReady: false,
@@ -23,6 +23,8 @@
         settlementsByMunicipality: new Map(),
         municipalityBoundaries: new Map(),
         markers: new Map(),
+        supportingDataStarted: false,
+        mobileDisclosureApplied: false,
         scenarios: {
             primary: makeScenario('primary', primaryId),
             secondary: makeScenario('secondary', secondaryId),
@@ -53,6 +55,10 @@
         compareToggle: document.getElementById('compare-toggle'),
         singleResults: document.getElementById('single-results'),
         comparisonResults: document.getElementById('comparison-results'),
+        comparisonPanel: document.getElementById('comparison-panel'),
+        citiesSection: document.getElementById('cities-section'),
+        selectionPrompt: document.getElementById('selection-prompt'),
+        singleOriginName: document.getElementById('single-origin-name'),
         compare: {
             primary: comparisonElements('primary'),
             secondary: comparisonElements('secondary'),
@@ -93,30 +99,27 @@
         state.markers.set(city.id, marker);
     });
 
-    addOriginMarker(state.scenarios.primary);
-    if (state.comparing) addOriginMarker(state.scenarios.secondary);
+    if (state.scenarios.primary.origin) addOriginMarker(state.scenarios.primary);
+    if (state.comparing && state.scenarios.secondary.origin) addOriginMarker(state.scenarios.secondary);
     fitMapToOrigins();
 
     elements.slider.min = config.slider.min;
     elements.slider.max = config.slider.max;
     elements.slider.step = config.slider.step;
     elements.slider.value = state.minutes;
-    elements.primarySelect.value = state.scenarios.primary.originId;
-    elements.secondarySelect.value = state.scenarios.secondary.originId;
+    elements.primarySelect.value = state.scenarios.primary.originId || '';
+    elements.secondarySelect.value = state.scenarios.secondary.originId || '';
     applyComparisonMode();
     updateSliderProgress();
 
     elements.primarySelect.addEventListener('change', () => selectOrigin('primary', elements.primarySelect.value));
     elements.secondarySelect.addEventListener('change', () => selectOrigin('secondary', elements.secondarySelect.value));
     elements.compareToggle.addEventListener('click', () => {
+        if (!state.scenarios.primary.origin) return;
         state.comparing = !state.comparing;
-        if (state.comparing && state.scenarios.secondary.originId === state.scenarios.primary.originId) {
-            resetScenarioOrigin(state.scenarios.secondary, firstOtherOrigin(state.scenarios.primary.originId));
-            elements.secondarySelect.value = state.scenarios.secondary.originId;
-        }
         applyComparisonMode();
         updateUrl();
-        if (state.comparing) {
+        if (state.comparing && state.scenarios.secondary.origin) {
             addOriginMarker(state.scenarios.secondary);
             loadRouting(state.scenarios.secondary);
             loadIsochrone(state.scenarios.secondary);
@@ -145,17 +148,17 @@
         const requestedMinutes = state.minutes;
         isochroneTimer = window.setTimeout(() => {
             loadIsochrone(state.scenarios.primary, requestedMinutes);
-            if (state.comparing) loadIsochrone(state.scenarios.secondary, requestedMinutes);
+            if (state.comparing && state.scenarios.secondary.origin) loadIsochrone(state.scenarios.secondary, requestedMinutes);
         }, 220);
     });
 
-    Promise.allSettled([
-        loadStatistics(),
-        loadGeography(),
-        loadRouting(state.scenarios.primary),
-    ]).finally(render);
-    loadIsochrone(state.scenarios.primary);
-    if (state.comparing) {
+    if (state.scenarios.primary.origin) {
+        applyMobileDisclosureDefaults();
+        ensureSupportingData();
+        loadRouting(state.scenarios.primary);
+        loadIsochrone(state.scenarios.primary);
+    }
+    if (state.comparing && state.scenarios.secondary.origin) {
         loadRouting(state.scenarios.secondary);
         loadIsochrone(state.scenarios.secondary);
     }
@@ -165,7 +168,7 @@
         return {
             key,
             originId,
-            origin: config.origins[originId],
+            origin: validOrigin(originId) ? config.origins[originId] : null,
             cities: config.cities.map(emptyRoute),
             routingReady: false,
             routeError: null,
@@ -202,16 +205,24 @@
         return typeof originId === 'string' && Object.hasOwn(config.origins, originId);
     }
 
-    function firstOtherOrigin(originId) {
-        return Object.keys(config.origins).find((id) => id !== originId) || originId;
-    }
-
     function selectOrigin(key, originId) {
         if (!validOrigin(originId)) return;
         const scenario = state.scenarios[key];
         if (scenario.originId === originId) return;
+        if (key === 'secondary' && state.scenarios.primary.originId === originId) {
+            elements.secondarySelect.value = scenario.originId || '';
+            window.alert('Vælg en anden by som udgangspunkt B.');
+            return;
+        }
         resetScenarioOrigin(scenario, originId);
+        if (key === 'primary' && state.scenarios.secondary.originId === originId) {
+            removeScenarioMap(state.scenarios.secondary);
+            resetScenarioOrigin(state.scenarios.secondary, null);
+            elements.secondarySelect.value = '';
+        }
         addOriginMarker(scenario);
+        applyMobileDisclosureDefaults();
+        ensureSupportingData();
         updateUrl();
         fitMapToOrigins();
         render();
@@ -219,9 +230,21 @@
         loadIsochrone(scenario);
     }
 
+    function ensureSupportingData() {
+        if (state.supportingDataStarted) return;
+        state.supportingDataStarted = true;
+        Promise.allSettled([loadStatistics(), loadGeography()]).finally(render);
+    }
+
+    function applyMobileDisclosureDefaults() {
+        if (state.mobileDisclosureApplied || !window.matchMedia('(max-width: 700px)').matches) return;
+        state.mobileDisclosureApplied = true;
+        document.querySelectorAll('#single-results .sub-fold, #cities-section').forEach((details) => details.removeAttribute('open'));
+    }
+
     function resetScenarioOrigin(scenario, originId) {
         scenario.originId = originId;
-        scenario.origin = config.origins[originId];
+        scenario.origin = validOrigin(originId) ? config.origins[originId] : null;
         scenario.cities = config.cities.map(emptyRoute);
         scenario.routingReady = false;
         scenario.routeError = null;
@@ -234,6 +257,7 @@
     }
 
     function addOriginMarker(scenario) {
+        if (!scenario.origin) return;
         if (scenario.marker) {
             scenario.marker
                 .setLatLng([scenario.origin.lat, scenario.origin.lon])
@@ -259,7 +283,7 @@
     }
 
     async function loadRouting(scenario) {
-        if (scenario.routingReady) return;
+        if (!scenario.origin || scenario.routingReady) return;
         const requestId = ++scenario.routingRequest;
         try {
             const response = await fetchJson(`${config.endpoints.routing}?action=matrix&origin=${encodeURIComponent(scenario.originId)}`);
@@ -303,6 +327,7 @@
     }
 
     async function loadIsochrone(scenario, requestedMinutes = state.minutes) {
+        if (!scenario.origin) return;
         const requestId = ++scenario.isochroneRequest;
         scenario.isochroneLoading = true;
         scenario.isochroneError = null;
@@ -345,20 +370,40 @@
     function render() {
         const primary = state.scenarios.primary;
         const secondary = state.scenarios.secondary;
+        const hasPrimary = Boolean(primary.origin);
+        const hasSecondary = Boolean(secondary.origin);
+        elements.slider.disabled = !hasPrimary;
+        elements.compareToggle.disabled = !hasPrimary;
+        elements.selectionPrompt.hidden = hasPrimary;
+        elements.status.hidden = !hasPrimary;
+        elements.singleResults.hidden = !hasPrimary || state.comparing;
+        elements.comparisonPanel.hidden = !hasPrimary || !state.comparing;
+        elements.citiesSection.hidden = !hasPrimary;
+        if (!hasPrimary) {
+            elements.originIntro.textContent = 'Udforsk og sammenlign arbejdsmarkedsoplande fra alle kommunens byer og lokalsamfund.';
+            elements.legendPrimary.textContent = 'Vælg udgangspunkt A';
+            elements.reached.textContent = 'Vælg by';
+            updateMarkers();
+            updateMapLoading();
+            return;
+        }
         const primaryResult = calculateScenario(primary);
-        const secondaryResult = state.comparing ? calculateScenario(secondary) : null;
+        const secondaryResult = state.comparing && hasSecondary ? calculateScenario(secondary) : null;
 
         elements.output.value = `${state.minutes} minutter`;
         elements.output.textContent = `${state.minutes} minutter`;
-        elements.originIntro.textContent = state.comparing
+        elements.singleOriginName.textContent = `A · ${primary.origin.name}`;
+        elements.originIntro.textContent = state.comparing && hasSecondary
             ? `Sammenlign arbejdsmarkedsoplandet fra ${primary.origin.name} og ${secondary.origin.name}.`
             : `Udforsk arbejdsmarkedsoplandet fra ${primary.origin.name}.`;
         elements.legendPrimary.textContent = primary.origin.name;
-        elements.legendSecondary.textContent = secondary.origin.name;
-        elements.citiesContext.textContent = state.comparing
+        elements.legendSecondary.textContent = hasSecondary ? secondary.origin.name : 'Vælg B';
+        elements.citiesContext.textContent = state.comparing && hasSecondary
             ? `${primary.origin.name} / ${secondary.origin.name}`
             : `fra ${primary.origin.name}`;
-        elements.reached.textContent = state.comparing
+        elements.reached.textContent = state.comparing && !hasSecondary
+            ? 'Vælg by B'
+            : state.comparing
             ? primaryResult.ready && secondaryResult?.ready
                 ? `A: ${primaryResult.reachedCities.length} · B: ${secondaryResult.reachedCities.length}`
                 : 'Beregner begge zoner…'
@@ -367,8 +412,10 @@
                 : 'Beregner zone og tal…';
 
         renderStatus();
-        if (state.comparing) {
+        if (state.comparing && secondaryResult) {
             renderComparison(primaryResult, secondaryResult);
+        } else if (state.comparing) {
+            renderComparisonWaiting(primaryResult);
         } else {
             renderSingle(primaryResult);
         }
@@ -378,6 +425,7 @@
     }
 
     function calculateScenario(scenario) {
+        if (!scenario.origin) return { ready: false, selected: false, error: null, reachedCities: [], jobs: null, workplaces: null, largest: null, branches: [], coverage: {} };
         const reachedCities = scenario.routingReady
             ? scenario.cities.filter((city) => config.reachability === 'zone' && scenario.geojson
                 ? pointInZone(city.lon, city.lat, scenario.geojson)
@@ -458,7 +506,7 @@
     }
 
     function activeScenarios() {
-        return state.comparing ? Object.values(state.scenarios) : [state.scenarios.primary];
+        return (state.comparing ? Object.values(state.scenarios) : [state.scenarios.primary]).filter((scenario) => scenario.origin);
     }
 
     function invalidateAnalysis(scenario) {
@@ -563,6 +611,20 @@
         elements.comparisonResults.setAttribute('aria-busy', String(!primaryResult.ready || !secondaryResult.ready));
     }
 
+    function renderComparisonWaiting(primaryResult) {
+        const primaryTarget = elements.compare.primary;
+        primaryTarget.name.textContent = state.scenarios.primary.origin.name;
+        const placeholder = primaryResult.error ? 'Fejl' : 'Beregner…';
+        setValue(primaryTarget.jobs, primaryResult.ready ? formatKnown(primaryResult.jobs) : placeholder, !primaryResult.ready && !primaryResult.error, Boolean(primaryResult.error));
+        setValue(primaryTarget.workplaces, primaryResult.ready ? formatKnown(primaryResult.workplaces) : placeholder, !primaryResult.ready && !primaryResult.error, Boolean(primaryResult.error));
+        setValue(primaryTarget.cities, primaryResult.ready ? numberFormat.format(primaryResult.reachedCities.length) : placeholder, !primaryResult.ready && !primaryResult.error, Boolean(primaryResult.error));
+        renderBranchChart(primaryTarget.branches, primaryResult.branches, undefined, !primaryResult.ready && !primaryResult.error, primaryResult.error);
+        elements.compare.secondary.name.textContent = 'Vælg udgangspunkt B';
+        ['jobs', 'workplaces', 'cities'].forEach((field) => setValue(elements.compare.secondary[field], '—', false));
+        elements.compare.secondary.branches.innerHTML = '<p class="empty-state">Vælg en anden by som B.</p>';
+        elements.comparisonResults.setAttribute('aria-busy', String(!primaryResult.ready));
+    }
+
     function renderBranchChart(target, branches, maximum = branches[0]?.jobs || 1, loading = false, error = null) {
         if (error) {
             target.innerHTML = '<p class="empty-state is-error">Tallene kunne ikke beregnes.</p>';
@@ -587,6 +649,7 @@
     function renderCityList() {
         const primary = state.scenarios.primary;
         const secondary = state.scenarios.secondary;
+        if (!primary.origin) return;
         const failed = activeScenarios().some((scenario) => (!scenario.routingReady && scenario.routeError) || scenario.isochroneError || scenario.analysisError) || state.statsError || state.geographyError;
         if (failed) {
             elements.cityList.innerHTML = '<p class="empty-state is-error">Bydata kunne ikke beregnes lige nu.</p>';
@@ -677,6 +740,7 @@
     }
 
     function cityFor(scenario, id) {
+        if (!scenario?.origin) return null;
         return scenario.cities.find((city) => city.id === id);
     }
 
@@ -701,33 +765,41 @@
         document.body.classList.toggle('is-comparing', state.comparing);
         elements.secondaryControl.hidden = !state.comparing;
         elements.legendSecondaryWrap.hidden = !state.comparing;
-        elements.singleResults.hidden = state.comparing;
-        elements.comparisonResults.hidden = !state.comparing;
+        elements.singleResults.hidden = state.comparing || !state.scenarios.primary.origin;
+        elements.comparisonPanel.hidden = !state.comparing || !state.scenarios.primary.origin;
         elements.compareToggle.setAttribute('aria-pressed', String(state.comparing));
-        elements.compareToggle.textContent = state.comparing ? 'Luk sammenligning' : 'Sammenlign';
+        elements.compareToggle.textContent = state.comparing ? 'Luk sammenligning' : 'Sammenlign A/B';
         window.setTimeout(() => map.invalidateSize(), 0);
     }
 
     function updateMapLoading() {
         const active = activeScenarios();
-        if (active.some((scenario) => scenario.isochroneLoading || scenario.analysisStatus === 'loading')) {
-            elements.mapLoading.textContent = state.comparing ? `Beregner to ${state.minutes}-minutters zoner…` : `Beregner ${state.minutes}-minutters zone…`;
+        if (!state.scenarios.primary.origin) {
+            elements.mapLoading.textContent = 'Vælg en by for at starte';
             elements.mapLoading.classList.remove('is-hidden', 'is-error');
+            elements.mapLoading.classList.add('is-prompt');
+        } else if (state.comparing && !state.scenarios.secondary.origin) {
+            elements.mapLoading.textContent = 'Vælg udgangspunkt B';
+            elements.mapLoading.classList.remove('is-hidden', 'is-error');
+            elements.mapLoading.classList.add('is-prompt');
+        } else if (active.some((scenario) => scenario.isochroneLoading || scenario.analysisStatus === 'loading')) {
+            elements.mapLoading.textContent = state.comparing ? `Beregner to ${state.minutes}-minutters zoner…` : `Beregner ${state.minutes}-minutters zone…`;
+            elements.mapLoading.classList.remove('is-hidden', 'is-error', 'is-prompt');
         } else if (active.some((scenario) => scenario.isochroneError)) {
             elements.mapLoading.textContent = 'En køretidszone kunne ikke hentes';
             elements.mapLoading.classList.remove('is-hidden');
             elements.mapLoading.classList.add('is-error');
         } else {
             elements.mapLoading.classList.add('is-hidden');
-            elements.mapLoading.classList.remove('is-error');
+            elements.mapLoading.classList.remove('is-error', 'is-prompt');
         }
     }
 
     function updateUrl() {
         const url = new URL(window.location.href);
-        if (state.scenarios.primary.originId === config.defaultOrigin) url.searchParams.delete('origin');
-        else url.searchParams.set('origin', state.scenarios.primary.originId);
-        if (state.comparing) url.searchParams.set('compare', state.scenarios.secondary.originId);
+        if (state.scenarios.primary.originId) url.searchParams.set('origin', state.scenarios.primary.originId);
+        else url.searchParams.delete('origin');
+        if (state.comparing && state.scenarios.secondary.originId) url.searchParams.set('compare', state.scenarios.secondary.originId);
         else url.searchParams.delete('compare');
         window.history.replaceState({}, '', url);
     }
@@ -751,8 +823,9 @@
     }
 
     function fitMapToOrigins() {
-        const points = [[state.scenarios.primary.origin.lat, state.scenarios.primary.origin.lon], ...config.cities.map((city) => [city.lat, city.lon])];
-        if (state.comparing) points.push([state.scenarios.secondary.origin.lat, state.scenarios.secondary.origin.lon]);
+        const points = [...config.cities.map((city) => [city.lat, city.lon])];
+        if (state.scenarios.primary.origin) points.push([state.scenarios.primary.origin.lat, state.scenarios.primary.origin.lon]);
+        if (state.comparing && state.scenarios.secondary.origin) points.push([state.scenarios.secondary.origin.lat, state.scenarios.secondary.origin.lon]);
         map.fitBounds(L.latLngBounds(points).pad(0.08), { padding: [30, 30] });
     }
 

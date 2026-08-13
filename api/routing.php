@@ -13,7 +13,7 @@ $config = require __DIR__ . '/../config/app.php';
 $routingConfig = $config['routing'];
 $action = $_GET['action'] ?? '';
 $ttl = (int) $config['routing']['cache_ttl'];
-$originId = is_string($_GET['origin'] ?? null) ? $_GET['origin'] : $config['default_origin'];
+$originId = is_string($_GET['origin'] ?? null) ? $_GET['origin'] : '';
 
 if (!isset($config['origins'][$originId])) {
     app_json_response(['ok' => false, 'error' => 'Ukendt udgangspunkt.'], 422);

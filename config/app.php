@@ -23,8 +23,8 @@ $travelTimeCalibration = require __DIR__ . '/routing-calibration.php';
 return [
     'name' => 'Arbejdsmarkedskort for Lemvig Kommune',
     'variant' => $isGoogleVariant ? 'google' : 'standard',
-    'default_origin' => 'baekmarksbro',
-    'comparison_origin' => 'lemvig',
+    'default_origin' => null,
+    'comparison_origin' => null,
     'origins' => [
         'lemvig' => [
             'id' => 'lemvig',

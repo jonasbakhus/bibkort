@@ -7,8 +7,8 @@ $clientConfig = [
     'name' => $config['name'],
     'variant' => $config['variant'],
     'reachability' => $config['routing']['reachability'],
-    'defaultOrigin' => $config['default_origin'],
-    'comparisonOrigin' => $config['comparison_origin'],
+    'defaultOrigin' => null,
+    'comparisonOrigin' => null,
     'origins' => $config['origins'],
     'slider' => $config['slider'],
     'cities' => $config['cities'],
@@ -20,19 +20,21 @@ $clientConfig = [
 ];
 $assetVersion = max(
     (int) filemtime(__DIR__ . '/assets/css/app.css'),
-    (int) filemtime(__DIR__ . '/assets/js/app.js')
+    (int) filemtime(__DIR__ . '/assets/js/app.js'),
+    (int) filemtime(__DIR__ . '/assets/brand/land-og-by-logo.svg')
 );
 $host = strtolower((string) ($_SERVER['HTTP_HOST'] ?? ''));
 $isStaging = str_starts_with($host, 'testbibkort.') || str_starts_with($host, 'testbibg.');
+$isGoogle = $config['variant'] === 'google';
 ?>
 <!doctype html>
 <html lang="da">
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <meta name="description" content="Sammenlign arbejdsmarkedsoplande for byer og lokalsamfund i Lemvig Kommune.">
+    <meta name="description" content="Sammenlign arbejdsmarkedsoplande for hele Lemvig Kommunes byer og lokalsamfund.">
     <?php if ($isStaging): ?><meta name="robots" content="noindex, nofollow, noarchive"><?php endif; ?>
-    <title>Arbejdsmarkedskort for Lemvig Kommune</title>
+    <title>Arbejdsmarkedskort for hele Lemvig Kommune · Land og By</title>
     <link rel="preconnect" href="https://unpkg.com">
     <link rel="preconnect" href="https://tile.openstreetmap.org">
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="anonymous">
@@ -47,19 +49,23 @@ $isStaging = str_starts_with($host, 'testbibkort.') || str_starts_with($host, 't
         <section class="map-region" aria-label="Kort over køretidsområdet">
             <div id="map"></div>
             <div class="map-legend" aria-hidden="true">
-                <span><i class="legend-dot origin-dot"></i><span id="legend-primary">Valgt udgangspunkt</span></span>
-                <span id="legend-secondary-wrap" hidden><i class="legend-dot secondary-dot"></i><span id="legend-secondary">Lemvig</span></span>
+                <span><i class="legend-dot origin-dot"></i><span id="legend-primary">Vælg udgangspunkt A</span></span>
+                <span id="legend-secondary-wrap" hidden><i class="legend-dot secondary-dot"></i><span id="legend-secondary">Vælg B</span></span>
                 <span><i class="legend-dot reached-dot"></i>Nået by</span>
                 <span><i class="legend-dot near-dot"></i>Nær grænsen</span>
             </div>
-            <div id="map-loading" class="map-loading" role="status">Beregner 45-minutters område…</div>
+            <div id="map-loading" class="map-loading is-prompt" role="status">Vælg en by for at starte</div>
         </section>
 
         <aside class="info-panel">
             <header class="hero">
-                <p class="eyebrow"><?= $config['variant'] === 'google' ? 'Google-test · ' : '' ?>Lemvig Kommune</p>
+                <a class="brand" href="https://landogbyforeningen.dk/" target="_blank" rel="noopener" aria-label="Land og By">
+                    <img src="assets/brand/land-og-by-logo.svg?v=<?= $assetVersion ?>" alt="">
+                    <span><strong>Land og By</strong><small>Sammen om udvikling</small></span>
+                </a>
+                <p class="eyebrow"><?= $isGoogle ? 'Google-test · ' : '' ?>For hele Lemvig Kommune</p>
                 <h1>Arbejdsmarkedskort</h1>
-                <p class="intro" id="origin-intro">Udforsk og sammenlign arbejdsmarkedsoplande fra kommunens byer og lokalsamfund.</p>
+                <p class="intro" id="origin-intro">Udforsk og sammenlign arbejdsmarkedsoplande fra alle kommunens byer og lokalsamfund.</p>
             </header>
 
             <section class="origin-control" aria-labelledby="origin-title">
@@ -67,24 +73,22 @@ $isStaging = str_starts_with($host, 'testbibkort.') || str_starts_with($host, 't
                 <div class="origin-toolbar">
                     <label class="origin-field" for="origin-primary">
                         <span>Udgangspunkt A</span>
-                        <select id="origin-primary">
+                        <select id="origin-primary" required>
+                            <option value="" selected>Vælg en by…</option>
                             <?php foreach ($config['origins'] as $id => $origin): ?>
-                                <option value="<?= htmlspecialchars($id, ENT_QUOTES, 'UTF-8') ?>" <?= $id === $config['default_origin'] ? 'selected' : '' ?>>
-                                    <?= htmlspecialchars($origin['name'] . ' · ' . $origin['description'], ENT_QUOTES, 'UTF-8') ?>
-                                </option>
+                                <option value="<?= htmlspecialchars($id, ENT_QUOTES, 'UTF-8') ?>"><?= htmlspecialchars($origin['name'] . ' · ' . $origin['description'], ENT_QUOTES, 'UTF-8') ?></option>
                             <?php endforeach; ?>
                         </select>
                     </label>
-                    <button id="compare-toggle" class="compare-toggle" type="button" aria-pressed="false">Sammenlign</button>
+                    <button id="compare-toggle" class="compare-toggle" type="button" aria-pressed="false" disabled>Sammenlign A/B</button>
                 </div>
                 <div id="secondary-control" class="secondary-control" hidden>
                     <label class="origin-field" for="origin-secondary">
                         <span>Udgangspunkt B</span>
                         <select id="origin-secondary">
+                            <option value="" selected>Vælg by B…</option>
                             <?php foreach ($config['origins'] as $id => $origin): ?>
-                                <option value="<?= htmlspecialchars($id, ENT_QUOTES, 'UTF-8') ?>" <?= $id === $config['comparison_origin'] ? 'selected' : '' ?>>
-                                    <?= htmlspecialchars($origin['name'] . ' · ' . $origin['description'], ENT_QUOTES, 'UTF-8') ?>
-                                </option>
+                                <option value="<?= htmlspecialchars($id, ENT_QUOTES, 'UTF-8') ?>"><?= htmlspecialchars($origin['name'] . ' · ' . $origin['description'], ENT_QUOTES, 'UTF-8') ?></option>
                             <?php endforeach; ?>
                         </select>
                     </label>
@@ -93,95 +97,63 @@ $isStaging = str_starts_with($host, 'testbibkort.') || str_starts_with($host, 't
 
             <section class="time-control" aria-labelledby="time-title">
                 <div class="control-heading">
-                    <div>
-                        <p class="section-kicker" id="time-title">Maksimal køretid</p>
-                        <output id="time-output" for="time-slider">45 minutter</output>
-                    </div>
-                    <span id="reached-summary" class="reach-pill">Indlæser…</span>
+                    <div><p class="section-kicker" id="time-title">Maksimal køretid</p><output id="time-output" for="time-slider"><?= (int) $config['slider']['default'] ?> minutter</output></div>
+                    <span id="reached-summary" class="reach-pill">Vælg by</span>
                 </div>
-                <input id="time-slider" type="range" min="<?= (int) $config['slider']['min'] ?>" max="<?= (int) $config['slider']['max'] ?>" step="<?= (int) $config['slider']['step'] ?>" value="<?= (int) $config['slider']['default'] ?>" aria-label="Maksimal køretid i minutter">
+                <input id="time-slider" type="range" min="<?= (int) $config['slider']['min'] ?>" max="<?= (int) $config['slider']['max'] ?>" step="<?= (int) $config['slider']['step'] ?>" value="<?= (int) $config['slider']['default'] ?>" aria-label="Maksimal køretid i minutter" disabled>
                 <div class="range-labels" aria-hidden="true"><span><?= (int) $config['slider']['min'] ?> min</span><span><?= (int) $config['slider']['max'] ?> min</span></div>
             </section>
 
-            <div id="data-status" class="data-status" role="status" aria-live="polite">Henter aktuelle køretider og jobtal…</div>
+            <div id="selection-prompt" class="selection-prompt" role="status"><strong>Start med at vælge en by</strong><span>Kortet favoriserer ikke et bestemt udgangspunkt. Alle byer starter på lige fod.</span></div>
+            <div id="data-status" class="data-status" role="status" aria-live="polite" hidden></div>
 
-            <div id="single-results" aria-busy="true">
-                <section class="metrics" aria-label="Nøgletal">
-                    <article class="metric-card metric-primary">
-                        <span class="metric-label">Anslåede job i zonen</span>
-                        <strong id="metric-jobs" class="is-loading-value">Beregner…</strong>
-                        <small id="metric-year">Beregner grundlag…</small>
-                    </article>
-                    <article class="metric-card">
-                        <span class="metric-label">Anslåede arbejdssteder</span>
-                        <strong id="metric-workplaces" class="is-loading-value">Beregner…</strong>
-                    </article>
-                    <article class="metric-card">
-                        <span class="metric-label">Arbejdsmarkedsbyer nået</span>
-                        <strong id="metric-cities" class="is-loading-value">Beregner…</strong>
-                    </article>
-                    <article class="metric-card">
-                        <span class="metric-label">Største nåede by</span>
-                        <strong id="metric-largest" class="metric-name is-loading-value">Beregner…</strong>
-                    </article>
-                </section>
-
-                <section class="panel-section" aria-labelledby="branches-title">
-                    <div class="section-heading">
-                        <h2 id="branches-title">Største brancher</h2>
-                        <span>anslåede job</span>
-                    </div>
-                    <div id="branch-chart" class="branch-chart"><p class="empty-state">Venter på jobtal…</p></div>
-                </section>
-            </div>
-
-            <section id="comparison-results" class="comparison-results" aria-label="Sammenligning" hidden>
-                <?php foreach (['primary' => 'A', 'secondary' => 'B'] as $key => $label): ?>
-                    <article class="comparison-column is-<?= $key ?>">
-                        <h2><i></i><span id="compare-<?= $key ?>-name">Udgangspunkt <?= $label ?></span></h2>
-                        <div class="comparison-metrics">
-                            <div><span>Job i zonen</span><strong id="compare-<?= $key ?>-jobs">—</strong></div>
-                            <div><span>Arbejdssteder</span><strong id="compare-<?= $key ?>-workplaces">—</strong></div>
-                            <div><span>Byer nået</span><strong id="compare-<?= $key ?>-cities">—</strong></div>
-                        </div>
-                        <h3>Største brancher</h3>
-                        <div id="compare-<?= $key ?>-branches" class="branch-chart"><p class="empty-state">Beregner…</p></div>
-                    </article>
-                <?php endforeach; ?>
-            </section>
-
-            <section class="panel-section" aria-labelledby="cities-title">
-                <div class="section-heading">
-                    <h2 id="cities-title">Byer efter køretid</h2>
-                    <span id="cities-context">fra valgt udgangspunkt</span>
+            <details id="single-results" class="fold-card" aria-busy="false" hidden open>
+                <summary>Resultater for <strong id="single-origin-name">valgt by</strong></summary>
+                <div class="fold-content">
+                    <section class="metrics" aria-label="Nøgletal">
+                        <article class="metric-card metric-primary"><span class="metric-label">A · Anslåede job i zonen</span><strong id="metric-jobs">—</strong><small id="metric-year">Modelberegning</small></article>
+                        <article class="metric-card"><span class="metric-label">A · Anslåede arbejdssteder</span><strong id="metric-workplaces">—</strong></article>
+                        <article class="metric-card"><span class="metric-label">A · Arbejdsmarkedsbyer nået</span><strong id="metric-cities">—</strong></article>
+                        <article class="metric-card"><span class="metric-label">A · Største nåede by</span><strong id="metric-largest" class="metric-name">—</strong></article>
+                    </section>
+                    <details class="sub-fold" open><summary>Største brancher <span>anslåede job</span></summary><div id="branch-chart" class="branch-chart"><p class="empty-state">Venter på jobtal…</p></div></details>
                 </div>
-                <div id="city-list" class="city-list"><p class="empty-state">Beregner ruter…</p></div>
-            </section>
+            </details>
 
-            <section class="method-note" aria-labelledby="method-title">
-                <h2 id="method-title">Om tallene</h2>
-                <?php if ($config['variant'] === 'google'): ?>
-                    <p>Køretidsfladen beregnes direkte med Google Maps Isochrones uden lokale særregler mellem bestemte byer. Zonen bruger statiske køretider, så den er stabil som planlægningskort og ikke skifter med trafikken.</p>
-                <?php else: ?>
-                    <p>Køretidsfladen følger vejnettet. Byernes start- og slutpunkter følger Google Maps. TravelTime er kalibreret mod en bred Google Routes-kontrolmatrix med 602 gyldige ruter og cirka 22–23 kontrolruter for hvert udgangspunkt. Samme tidskurve bruges på hele zonen; der findes ingen særregler for enkelte destinationer.</p>
-                <?php endif; ?>
-                <p>Præcise jobtal pr. adresse er ikke offentligt tilgængelige. Derfor fordeles 90 % af kommunens ERHV2-tal på officielle byområder efter deres BY3-befolkning; en byandel tæller, når bymidten ligger i zonen. De sidste 10 % fordeles efter, hvor stor en del af kommunens landareal zonen dækker. Resultaterne er modelberegnede anslåede tal.</p>
-            </section>
+            <details id="comparison-panel" class="fold-card" hidden open>
+                <summary>Sammenligning af A og B</summary>
+                <section id="comparison-results" class="comparison-results" aria-label="Sammenligning">
+                    <?php foreach (['primary' => 'A', 'secondary' => 'B'] as $key => $label): ?>
+                        <article class="comparison-column is-<?= $key ?>">
+                            <h2><b class="compare-badge"><?= $label ?></b><i></i><span id="compare-<?= $key ?>-name">Vælg udgangspunkt <?= $label ?></span></h2>
+                            <div class="comparison-metrics">
+                                <div><span><?= $label ?> · Job i zonen</span><strong id="compare-<?= $key ?>-jobs">—</strong></div>
+                                <div><span><?= $label ?> · Arbejdssteder</span><strong id="compare-<?= $key ?>-workplaces">—</strong></div>
+                                <div><span><?= $label ?> · Byer nået</span><strong id="compare-<?= $key ?>-cities">—</strong></div>
+                            </div>
+                            <h3><?= $label ?> · Største brancher</h3><div id="compare-<?= $key ?>-branches" class="branch-chart"><p class="empty-state">Vælg by…</p></div>
+                        </article>
+                    <?php endforeach; ?>
+                </section>
+            </details>
+
+            <details id="cities-section" class="fold-card" hidden open>
+                <summary>Byer efter køretid <span id="cities-context">fra valgt udgangspunkt</span></summary>
+                <div id="city-list" class="city-list"><p class="empty-state">Vælg en by…</p></div>
+            </details>
+
+            <aside class="disclaimer" aria-labelledby="disclaimer-title">
+                <strong id="disclaimer-title">Vigtig disclaimer</strong>
+                <p>Dette er et transparent analyseværktøj – ikke officiel statistik, navigation eller en myndighedsvurdering. Jobtal, arbejdssteder og zoner er modelberegnede skøn med usikkerhed og bør ikke stå alene ved økonomiske, juridiske, trafikale eller planmæssige beslutninger.</p>
+                <p>Projektets praktiske udgangspunkt er, at brugerens kontrolture i forbrugerproduktet <span class="google-maps-attribution" translate="no">Google Maps</span> opleves som korrekte. Standardmodellens TravelTime-resultater er derfor justeret med en bred, statisk Google Routes-kontrolmatrix. Det er en kalibrering – ikke en uafhængig validering eller garanti for samme resultat som Google Maps.</p>
+                <a class="text-link" href="metode.php">Læs den fulde metode, formler, usikkerheder, API’er, datakilder og licenser</a>
+            </aside>
 
             <footer class="sources">
-                <strong>Kilder</strong>
-                <a href="https://www.statbank.dk/ERHV2" target="_blank" rel="noopener">Danmarks Statistik / ERHV2</a>
-                <a href="https://www.statbank.dk/BY3" target="_blank" rel="noopener">Danmarks Statistik / BY3</a>
-                <a href="https://dataforsyningen.dk/" target="_blank" rel="noopener">Dataforsyningen</a>
-                <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a>
-                <?php if ($config['variant'] === 'google'): ?>
-                    <a href="https://developers.google.com/maps/documentation/isochrones" target="_blank" rel="noopener" translate="no">Google Maps</a>
-                <?php elseif ($config['routing']['provider'] === 'TravelTime'): ?>
-                    <a href="https://traveltime.com/" target="_blank" rel="noopener">TravelTime routing</a>
-                    <a href="https://developers.google.com/maps/documentation/routes" target="_blank" rel="noopener" translate="no">Google Routes-kontrolmatrix</a>
-                <?php else: ?>
-                    <a href="https://valhalla.github.io/valhalla/" target="_blank" rel="noopener">Valhalla routing</a>
-                <?php endif; ?>
+                <div class="source-copy"><strong>Kilder og kreditering</strong><span>Kilde: Egne beregninger baseret på tal fra Danmarks Statistik, Statistikbanken ERHV2 og BY3.</span><span>Indeholder data fra Styrelsen for Dataforsyning og Infrastruktur: kommunegrænser og steddata, leveret via Dataforsyningens API-datatjenester.</span></div>
+                <div class="source-links"><a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">© OpenStreetMap-bidragsydere · ODbL</a><a href="https://traveltime.com/" target="_blank" rel="noopener">TravelTime</a><?php if ($isGoogle): ?><a href="https://developers.google.com/maps/documentation/isochrones" target="_blank" rel="noopener"><span class="google-maps-attribution" translate="no">Google Maps</span></a><?php endif; ?></div>
+                <nav aria-label="Juridisk og dokumentation"><a href="metode.php">Metode</a><a href="vilkaar.php">Vilkår</a><a href="privatliv.php">Privatliv</a></nav>
+                <p class="publisher"><strong>Udgivet af Land og By</strong><span>Sammen om udvikling · For hele Lemvig Kommune</span><span>Udvikler: Jonas Munkholm Jensen</span></p>
             </footer>
         </aside>
     </main>
