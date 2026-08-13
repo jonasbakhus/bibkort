@@ -139,7 +139,7 @@ $isGoogle = $config['variant'] === 'google';
                         <article class="metric-card"><span class="metric-label">A · Arbejdsmarkedsbyer nået</span><strong id="metric-cities">—</strong></article>
                         <article class="metric-card"><span class="metric-label">A · Største nåede by</span><strong id="metric-largest" class="metric-name">—</strong></article>
                     </section>
-                    <details class="sub-fold municipality-fold" open><summary>Job fordelt på kommuner <span>byer / øvrigt / udenfor</span></summary><div id="municipality-breakdown" class="municipality-breakdown"><p class="empty-state">Venter på kommunetal…</p></div></details>
+                    <details class="sub-fold municipality-fold"><summary>Job fordelt på kommuner <span>byer / øvrigt / udenfor</span></summary><div id="municipality-breakdown" class="municipality-breakdown"><p class="empty-state">Venter på kommunetal…</p></div></details>
                     <details class="sub-fold" open><summary>Største brancher <span>anslåede job</span></summary><div id="branch-chart" class="branch-chart"><p class="empty-state">Venter på jobtal…</p></div></details>
                 </div>
             </details>
@@ -149,7 +149,7 @@ $isGoogle = $config['variant'] === 'google';
                 <section id="comparison-results" class="comparison-results" aria-label="Sammenligning">
                     <?php foreach (['primary' => 'A', 'secondary' => 'B'] as $key => $label): ?>
                         <article class="comparison-column is-<?= $key ?>">
-                            <h2><b class="compare-badge"><?= $label ?></b><i></i><span id="compare-<?= $key ?>-name">Vælg udgangspunkt <?= $label ?></span></h2>
+                            <h2><b id="compare-<?= $key ?>-badge" class="compare-badge"><?= $label ?></b><i></i><span id="compare-<?= $key ?>-name">Vælg udgangspunkt <?= $label ?></span></h2>
                             <div class="comparison-metrics">
                                 <div><span><?= $label ?> · Job i zonen</span><strong id="compare-<?= $key ?>-jobs">—</strong></div>
                                 <div><span><?= $label ?> · Arbejdssteder</span><strong id="compare-<?= $key ?>-workplaces">—</strong></div>
@@ -158,6 +158,10 @@ $isGoogle = $config['variant'] === 'google';
                         </article>
                     <?php endforeach; ?>
                 </section>
+                <div id="comparison-key" class="comparison-key" aria-label="Forklaring af A og B">
+                    <span class="is-primary"><b aria-hidden="true">A</b><span id="comparison-key-primary">Vælg udgangspunkt A</span></span>
+                    <span class="is-secondary"><b aria-hidden="true">B</b><span id="comparison-key-secondary">Vælg udgangspunkt B</span></span>
+                </div>
                 <div id="comparison-branches-compact" class="comparison-branches-compact" aria-label="Sammenligning af brancher"></div>
                 <div id="comparison-municipalities" class="comparison-municipalities-combined" aria-label="Sammenligning af kommuner"></div>
             </details>

@@ -74,6 +74,8 @@
         mapSizeToggle: document.getElementById('map-size-toggle'),
         comparisonBranchesCompact: document.getElementById('comparison-branches-compact'),
         comparisonMunicipalities: document.getElementById('comparison-municipalities'),
+        comparisonKeyPrimary: document.getElementById('comparison-key-primary'),
+        comparisonKeySecondary: document.getElementById('comparison-key-secondary'),
         compare: {
             primary: comparisonElements('primary'),
             secondary: comparisonElements('secondary'),
@@ -266,6 +268,7 @@
 
     function comparisonElements(key) {
         return {
+            badge: document.getElementById(`compare-${key}-badge`),
             name: document.getElementById(`compare-${key}-name`),
             jobs: document.getElementById(`compare-${key}-jobs`),
             workplaces: document.getElementById(`compare-${key}-workplaces`),
@@ -313,7 +316,7 @@
     function applyMobileDisclosureDefaults() {
         if (state.mobileDisclosureApplied || !window.matchMedia('(max-width: 700px)').matches) return;
         state.mobileDisclosureApplied = true;
-        document.querySelectorAll('#single-results .sub-fold:not(.municipality-fold), #cities-section').forEach((details) => details.removeAttribute('open'));
+        document.querySelectorAll('#single-results .sub-fold, #cities-section').forEach((details) => details.removeAttribute('open'));
     }
 
     function resetScenarioOrigin(scenario, originId) {
@@ -747,6 +750,7 @@
 
     function renderComparison(primaryResult, secondaryResult) {
         const results = { primary: primaryResult, secondary: secondaryResult };
+        renderComparisonKey();
         const sharedMaximum = Math.max(1, ...primaryResult.branches.map((branch) => branch.jobs), ...secondaryResult.branches.map((branch) => branch.jobs));
         Object.entries(results).forEach(([key, result]) => {
             const target = elements.compare[key];
@@ -762,6 +766,7 @@
     }
 
     function renderComparisonWaiting(primaryResult) {
+        renderComparisonKey();
         const primaryTarget = elements.compare.primary;
         primaryTarget.name.textContent = state.scenarios.primary.origin.name;
         const placeholder = primaryResult.error ? 'Fejl' : 'Beregner…';
@@ -773,6 +778,27 @@
         elements.comparisonBranchesCompact.innerHTML = '<p class="empty-state">Vælg udgangspunkt B for at sammenligne brancher.</p>';
         elements.comparisonMunicipalities.innerHTML = '<p class="empty-state">Vælg udgangspunkt B for at sammenligne kommuner.</p>';
         elements.comparisonResults.setAttribute('aria-busy', String(!primaryResult.ready));
+    }
+
+    function renderComparisonKey() {
+        const primaryName = state.scenarios.primary.origin?.name || 'Vælg udgangspunkt A';
+        const secondaryName = state.scenarios.secondary.origin?.name || 'Vælg udgangspunkt B';
+        const entries = [
+            ['primary', 'A', primaryName, elements.comparisonKeyPrimary],
+            ['secondary', 'B', secondaryName, elements.comparisonKeySecondary],
+        ];
+        entries.forEach(([key, label, name, target]) => {
+            const description = `${label} = ${name}`;
+            target.textContent = name;
+            target.parentElement.title = description;
+            elements.compare[key].badge.title = description;
+            elements.compare[key].badge.setAttribute('aria-label', description);
+        });
+    }
+
+    function comparisonBadgeHtml(label, name) {
+        const description = escapeHtml(`${label} = ${name}`);
+        return `<b title="${description}" aria-label="${description}">${label}</b>`;
     }
 
     function renderCompactComparisonBranches(primaryResult, secondaryResult, maximum) {
@@ -798,8 +824,8 @@
             <div class="compact-branch-row">
                 <strong>${escapeHtml(shortBranchName(branch.name))}</strong>
                 <div class="compact-comparison-values">
-                    <div class="compact-branch-value"><b>A</b><span class="branch-track"><i style="width:${comparisonWidth(branch.primary, maximum)}%"></i></span><em>${numberFormat.format(branch.primary)}</em></div>
-                    <div class="compact-branch-value is-secondary"><b>B</b><span class="branch-track"><i style="width:${comparisonWidth(branch.secondary, maximum)}%"></i></span><em>${numberFormat.format(branch.secondary)}</em></div>
+                    <div class="compact-branch-value">${comparisonBadgeHtml('A', state.scenarios.primary.origin.name)}<span class="branch-track"><i style="width:${comparisonWidth(branch.primary, maximum)}%"></i></span><em>${numberFormat.format(branch.primary)}</em></div>
+                    <div class="compact-branch-value is-secondary">${comparisonBadgeHtml('B', state.scenarios.secondary.origin.name)}<span class="branch-track"><i style="width:${comparisonWidth(branch.secondary, maximum)}%"></i></span><em>${numberFormat.format(branch.secondary)}</em></div>
                 </div>
             </div>
         `).join('')}`;
@@ -840,13 +866,13 @@
                 <summary>
                     <strong>${escapeHtml(row.name)} Kommune</strong>
                     <span class="compact-comparison-values">
-                        <span class="compact-branch-value"><b>A</b><span class="branch-track"><i style="width:${comparisonWidth(row.primary.jobs, maximum)}%"></i></span><em>${formatKnown(row.primary.jobs)}</em></span>
-                        <span class="compact-branch-value is-secondary"><b>B</b><span class="branch-track"><i style="width:${comparisonWidth(row.secondary.jobs, maximum)}%"></i></span><em>${formatKnown(row.secondary.jobs)}</em></span>
+                        <span class="compact-branch-value">${comparisonBadgeHtml('A', primaryName)}<span class="branch-track"><i style="width:${comparisonWidth(row.primary.jobs, maximum)}%"></i></span><em>${formatKnown(row.primary.jobs)}</em></span>
+                        <span class="compact-branch-value is-secondary">${comparisonBadgeHtml('B', secondaryName)}<span class="branch-track"><i style="width:${comparisonWidth(row.secondary.jobs, maximum)}%"></i></span><em>${formatKnown(row.secondary.jobs)}</em></span>
                     </span>
                 </summary>
                 <div class="comparison-municipality-details">
-                    <section><h4><b>A</b>${escapeHtml(primaryName)}</h4>${municipalityCardHtml(row.primary)}</section>
-                    <section class="is-secondary"><h4><b>B</b>${escapeHtml(secondaryName)}</h4>${municipalityCardHtml(row.secondary)}</section>
+                    <section><h4>${comparisonBadgeHtml('A', primaryName)}${escapeHtml(primaryName)}</h4>${municipalityCardHtml(row.primary)}</section>
+                    <section class="is-secondary"><h4>${comparisonBadgeHtml('B', secondaryName)}${escapeHtml(secondaryName)}</h4>${municipalityCardHtml(row.secondary)}</section>
                 </div>
             </details>
         `).join('')}`;
