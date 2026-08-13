@@ -84,7 +84,7 @@ final class TravelTimeProvider
         }
 
         return array_map(
-            static function (array $city, string $destinationId) use ($routesById): array {
+            function (array $city, string $destinationId) use ($routesById): array {
                 $properties = $routesById[$destinationId] ?? [];
 
                 return array_merge($city, [
