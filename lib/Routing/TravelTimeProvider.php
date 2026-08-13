@@ -4,18 +4,23 @@ declare(strict_types=1);
 
 final class TravelTimeProvider
 {
+    private float $interceptSeconds;
+    private float $slope;
+
     public function __construct(
         private string $baseUrl,
         private string $appId,
         private string $apiKey,
-        private float $timeFactor = 1.0
+        array $calibration = []
     ) {
         $this->baseUrl = rtrim($this->baseUrl, '/');
+        $this->interceptSeconds = (float) ($calibration['intercept_seconds'] ?? 0.0);
+        $this->slope = (float) ($calibration['slope'] ?? 1.0);
         if ($this->appId === '' || $this->apiKey === '') {
             throw new RuntimeException('TravelTime mangler Application ID eller Application Key.');
         }
-        if ($this->timeFactor <= 0 || $this->timeFactor > 2) {
-            throw new RuntimeException('TravelTime-kalibreringsfaktoren er ugyldig.');
+        if ($this->slope < 0.5 || $this->slope > 1.5 || abs($this->interceptSeconds) > 1800) {
+            throw new RuntimeException('TravelTime-kalibreringen er ugyldig.');
         }
     }
 
@@ -32,8 +37,8 @@ final class TravelTimeProvider
                     'id' => 'isochrone',
                     'coords' => $this->coords($origin),
                     'transportation' => ['type' => 'driving'],
-                    // En faktor under 1 udvider råzonen, så den viste tid svarer til den kalibrerede tid.
-                    'travel_time' => (int) round($minutes * 60 / $this->timeFactor),
+                    // Vend den kalibrerede tidskurve om, så polygon og viste matrix bruger samme model.
+                    'travel_time' => $this->rawSecondsForCalibrated($minutes * 60),
                     'arrival_time_period' => 'weekday_morning',
                 ]],
             ],
@@ -89,7 +94,7 @@ final class TravelTimeProvider
 
                 return array_merge($city, [
                     'travelSeconds' => isset($properties['travel_time'])
-                        ? (int) round((float) $properties['travel_time'] * $this->timeFactor)
+                        ? $this->calibratedSeconds((float) $properties['travel_time'])
                         : null,
                     'distanceKm' => isset($properties['distance']) ? round((float) $properties['distance'] / 1000, 1) : null,
                 ]);
@@ -102,6 +107,16 @@ final class TravelTimeProvider
     private function coords(array $location): array
     {
         return ['lat' => (float) $location['lat'], 'lng' => (float) $location['lon']];
+    }
+
+    private function calibratedSeconds(float $rawSeconds): int
+    {
+        return max(0, (int) round($rawSeconds * $this->slope + $this->interceptSeconds));
+    }
+
+    private function rawSecondsForCalibrated(int $calibratedSeconds): int
+    {
+        return max(1, (int) round(($calibratedSeconds - $this->interceptSeconds) / $this->slope));
     }
 
     private function request(string $path, array $payload, array $headers = []): array

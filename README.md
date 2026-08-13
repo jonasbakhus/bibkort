@@ -11,7 +11,7 @@ Appen er bygget til et almindeligt PHP-webhotel og kræver ingen database, Compo
 - to udgangspunkter kan sammenlignes med hver sin zone, nøgletal og branchegraf
 - TravelTime-isochroner baseret på vejnettet, ikke simple cirkler; Valhalla bruges som lokal fallback uden nøgler
 - byernes start- og slutpunkter følger Google Maps; brugerens præcise punkter for Bækmarksbro og Vilhelmsborgvej er bevaret
-- TravelTime er lokalt kalibreret til Bækmarksbro–Gødstrup og Thyborøn–Struer, som begge er 44 minutter i Google Directions
+- TravelTime er kalibreret pr. udgangspunkt mod en bred Google Routes-matrix med 621 ruter og cirka 22–23 kontrolruter pr. sted
 - faktiske køretider og vejafstande til 14 arbejdsmarkedsbyer
 - servercache af både isochroner, køretidsmatrix og Statistikbank-data
 - seneste tilgængelige ERHV2-år findes automatisk
@@ -33,7 +33,9 @@ config/app.php                 Udgangspunkt, byer, kommuner og providers
 lib/bootstrap.php              HTTP-, cache- og JSON-hjælpere
 lib/Geography.php              Samler BY3 og Dataforsyningens geometri
 lib/Routing/TravelTimeProvider.php TravelTime-provider til flade og matrix
+lib/Routing/GoogleRoutesMatrixClient.php Google-kontrolmatrix til manuel genkalibrering
 lib/Routing/ValhallaProvider.php  Isoleret routing-provider
+config/routing-calibration.php    Versionsstyrede kalibreringskurver
 cache/                         Genererede cachefiler (ignoreres af Git)
 ```
 
@@ -47,6 +49,8 @@ cache/                         Genererede cachefiler (ignoreres af Git)
 - skriveadgang for PHP til mappen `cache/`
 
 TravelTime-oplysninger læses fra miljøvariablerne `BIBKORT_TRAVELTIME_APP_ID` og `BIBKORT_TRAVELTIME_API_KEY` eller fra den Git-ignorerede fil `config/secrets.php`. Kopiér `config/secrets.example.php` som udgangspunkt. Hvis oplysningerne ikke findes, bruger appen Valhalla. Provider kan desuden vælges eksplicit med `BIBKORT_ROUTING_PROVIDER`.
+
+Google Routes bruges kun som kontrolgrundlag ved en bevidst genkalibrering. Scriptet `scripts/calibrate-routing.php` sammenholder alle 27 udgangspunkter med de 23 kontrolbyer i én 621-ruters matrix og tilpasser én fælles lineær tidskurve pr. udgangspunkt. API-nøglen bliver på serveren; Google kaldes ikke ved almindelige besøg. Kør `php scripts/calibrate-routing.php > cache/google-routes-calibration.json`, gennemgå valideringen, og versionsstyr derefter de godkendte koefficienter i `config/routing-calibration.php`.
 
 ## Lokal udvikling
 
@@ -68,6 +72,7 @@ php -l api/geography.php
 php -l lib/bootstrap.php
 php -l lib/Geography.php
 php -l lib/Routing/TravelTimeProvider.php
+php -l lib/Routing/GoogleRoutesMatrixClient.php
 php -l lib/Routing/ValhallaProvider.php
 ```
 
@@ -106,7 +111,7 @@ Der skal ikke køres Composer, npm eller andre buildtrin på serveren. `cache/.h
 
 ## Metode og kendte begrænsninger
 
-Isochronen er en modelberegning på vejnettet. Resultatet afhænger af routingproviderens kortdata og kørselsmodel og er ikke en garanti for en bestemt rejsetid. TravelTime-beregningen bruger en typisk hverdagsmorgen, ikke live trafik. Bækmarksbro kalibreres mod turen til Gødstrup og Thyborøn mod turen til Struer; begge Google Directions-referencer er 44 minutter. Øvrige udgangspunkter anvender indtil videre Bækmarksbro-faktoren, indtil der findes lokale referencekørsler.
+Isochronen er en modelberegning på vejnettet. Resultatet afhænger af routingproviderens kortdata og kørselsmodel og er ikke en garanti for en bestemt rejsetid. TravelTime-beregningen bruger en typisk hverdagsmorgen, ikke live trafik. Standardmodellens tidskurver er kalibreret mod Google Routes uden trafik for 602 gyldige ruter. Samme kurve anvendes på både bymatricen og hele isochronen for hvert udgangspunkt; der findes ingen særregler for enkelte destinationer. Den gennemsnitlige absolutte afvigelse i kontrolgrundlaget er cirka 2,1 minutter.
 
 ERHV2 offentliggør præcise totaler på kommuneniveau, men ikke jobtal pr. adresse. Modellen fordeler derfor 90 % af hver kommunes tal på alle officielle BY3-byområder efter befolkning. En byandel medregnes, når byens officielle visuelle center ligger i køretidszonen. De resterende 10 % fordeles proportionalt efter zonens arealoverlap med kommunen. Brancher og arbejdssteder anvender samme geografiske faktor. Tallene i zonen er derfor **anslåede**, mens kommunetotalerne fortsat stemmer med ERHV2.
 

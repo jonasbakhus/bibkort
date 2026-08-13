@@ -163,7 +163,7 @@ $isStaging = str_starts_with($host, 'testbibkort.') || str_starts_with($host, 't
                 <?php if ($config['variant'] === 'google'): ?>
                     <p>Køretidsfladen beregnes direkte med Google Maps Isochrones uden lokale særregler mellem bestemte byer. Zonen bruger statiske køretider, så den er stabil som planlægningskort og ikke skifter med trafikken.</p>
                 <?php else: ?>
-                    <p>Køretidsfladen følger vejnettet. Byernes start- og slutpunkter følger Google Maps. TravelTime er lokalt kalibreret mod Bækmarksbro–Gødstrup og Thyborøn–Struer, som begge er 44 minutter i Google Directions.</p>
+                    <p>Køretidsfladen følger vejnettet. Byernes start- og slutpunkter følger Google Maps. TravelTime er kalibreret mod en bred Google Routes-kontrolmatrix med 602 gyldige ruter og cirka 22–23 kontrolruter for hvert udgangspunkt. Samme tidskurve bruges på hele zonen; der findes ingen særregler for enkelte destinationer.</p>
                 <?php endif; ?>
                 <p>Præcise jobtal pr. adresse er ikke offentligt tilgængelige. Derfor fordeles 90 % af kommunens ERHV2-tal på officielle byområder efter deres BY3-befolkning; en byandel tæller, når bymidten ligger i zonen. De sidste 10 % fordeles efter, hvor stor en del af kommunens landareal zonen dækker. Resultaterne er modelberegnede anslåede tal.</p>
             </section>
@@ -178,6 +178,7 @@ $isStaging = str_starts_with($host, 'testbibkort.') || str_starts_with($host, 't
                     <a href="https://developers.google.com/maps/documentation/isochrones" target="_blank" rel="noopener" translate="no">Google Maps</a>
                 <?php elseif ($config['routing']['provider'] === 'TravelTime'): ?>
                     <a href="https://traveltime.com/" target="_blank" rel="noopener">TravelTime routing</a>
+                    <a href="https://developers.google.com/maps/documentation/routes" target="_blank" rel="noopener" translate="no">Google Routes-kontrolmatrix</a>
                 <?php else: ?>
                     <a href="https://valhalla.github.io/valhalla/" target="_blank" rel="noopener">Valhalla routing</a>
                 <?php endif; ?>

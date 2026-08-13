@@ -19,9 +19,11 @@ if (!isset($config['origins'][$originId])) {
     app_json_response(['ok' => false, 'error' => 'Ukendt udgangspunkt.'], 422);
 }
 
-$timeFactor = $config['variant'] === 'google'
-    ? 1.0
-    : (float) ($routingConfig['origin_time_factors'][$originId] ?? $routingConfig['travel_time_factor']);
+$calibrationSet = $routingConfig['travel_time_calibration'];
+$calibration = $config['variant'] === 'google'
+    ? ['intercept_seconds' => 0, 'slope' => 1.0]
+    : ($calibrationSet['origins'][$originId] ?? $calibrationSet['default']);
+$calibrationVersion = $config['variant'] === 'google' ? 'identity' : $calibrationSet['version'];
 
 $origin = $config['origins'][$originId];
 
@@ -32,10 +34,10 @@ try {
                 $routingConfig['traveltime_base_url'],
                 $routingConfig['traveltime_app_id'],
                 $routingConfig['traveltime_api_key'],
-                $timeFactor
+                $calibration
             )
             : new ValhallaProvider($routingConfig['base_url']);
-        $cacheKey = 'routing-matrix-' . sha1(json_encode([$origin, $config['cities'], $provider->name(), $timeFactor]));
+        $cacheKey = 'routing-matrix-' . sha1(json_encode([$origin, $config['cities'], $provider->name(), $calibrationVersion, $calibration]));
         $cached = app_cache_read($cacheKey, $ttl);
         if ($cached !== null) {
             app_json_response([
@@ -90,7 +92,7 @@ try {
                     $routingConfig['traveltime_base_url'],
                     $routingConfig['traveltime_app_id'],
                     $routingConfig['traveltime_api_key'],
-                    $timeFactor
+                    $calibration
                 )
                 : new ValhallaProvider($routingConfig['base_url']));
         $minutes = filter_input(INPUT_GET, 'minutes', FILTER_VALIDATE_INT);
@@ -99,7 +101,7 @@ try {
             app_json_response(['ok' => false, 'error' => sprintf('minutes skal være %d–%d i trin på %d.', $slider['min'], $slider['max'], $slider['step'])], 422);
         }
 
-        $cacheKey = 'routing-isochrone-' . sha1(json_encode([$origin, $minutes, $provider->name(), $timeFactor]));
+        $cacheKey = 'routing-isochrone-' . sha1(json_encode([$origin, $minutes, $provider->name(), $calibrationVersion, $calibration]));
         // Google Maps-indhold gemmes ikke i vores filcache; hver brugerhandling henter en frisk zone.
         $cacheAllowed = $provider->name() !== 'GoogleIsochrones';
         $cached = $cacheAllowed ? app_cache_read($cacheKey, $ttl) : null;

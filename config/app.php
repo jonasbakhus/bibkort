@@ -14,9 +14,11 @@ if (is_file($secretsFile)) {
 $travelTimeAppId = getenv('BIBKORT_TRAVELTIME_APP_ID') ?: ($secrets['traveltime_app_id'] ?? '');
 $travelTimeApiKey = getenv('BIBKORT_TRAVELTIME_API_KEY') ?: ($secrets['traveltime_api_key'] ?? '');
 $googleIsochronesApiKey = getenv('BIBKORT_GOOGLE_ISOCHRONES_API_KEY') ?: ($secrets['google_isochrones_api_key'] ?? '');
+$googleRoutesApiKey = getenv('BIBKORT_GOOGLE_ROUTES_API_KEY') ?: ($secrets['google_routes_api_key'] ?? $googleIsochronesApiKey);
 $variant = getenv('BIBKORT_VARIANT') ?: ($secrets['variant'] ?? 'standard');
 $isGoogleVariant = $variant === 'google';
 $preferredRoutingProvider = $travelTimeAppId !== '' && $travelTimeApiKey !== '' ? 'TravelTime' : 'Valhalla';
+$travelTimeCalibration = require __DIR__ . '/routing-calibration.php';
 
 return [
     'name' => 'Arbejdsmarkedskort for Lemvig Kommune',
@@ -176,13 +178,11 @@ return [
         'traveltime_api_key' => (string) $travelTimeApiKey,
         'google_isochrones_base_url' => 'https://isochrones.googleapis.com',
         'google_isochrones_api_key' => (string) $googleIsochronesApiKey,
-        // Standard: Bækmarksbro–Gødstrup, 2.640 faktiske sekunder / 2.804 modelsekunder.
-        'travel_time_factor' => 2640 / 2804,
-        // Google Directions-reference for udgangspunkter, hvor standardfaktoren ikke rammer lokalt.
-        'origin_time_factors' => [
-            'baekmarksbro' => 2640 / 2804,
-            'thyboroen' => 2640 / 3296,
-        ],
+        'google_routes_base_url' => 'https://routes.googleapis.com',
+        // Bruges kun af scripts/calibrate-routing.php, aldrig ved almindelige sidevisninger.
+        'google_routes_api_key' => (string) $googleRoutesApiKey,
+        // Bred, reproducerbar Google Routes-kalibrering. Google-varianten bruger identitet her.
+        'travel_time_calibration' => $travelTimeCalibration,
         'cache_ttl' => 30 * 24 * 60 * 60,
     ],
     'statbank' => [

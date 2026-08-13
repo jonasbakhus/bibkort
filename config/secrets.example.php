@@ -9,4 +9,6 @@ return [
     // Brug kun på det separate Google-testmiljø. Nøglen sendes aldrig til browseren.
     'variant' => 'standard',
     'google_isochrones_api_key' => 'INDSÆT_GOOGLE_MAPS_API_KEY',
+    // Kan være samme server/IP-begrænsede nøgle, hvis både Isochrones API og Routes API er tilladt.
+    'google_routes_api_key' => 'INDSÆT_GOOGLE_MAPS_API_KEY',
 ];
