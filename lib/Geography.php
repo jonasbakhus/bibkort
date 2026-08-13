@@ -91,6 +91,10 @@ function app_fetch_analysis_geography(array $config): array
             'code' => $code,
             'name' => $name,
         ]);
+        $boundary['geometry'] = app_simplify_geometry(
+            $boundary['geometry'],
+            (float) ($config['geography']['boundary_simplify_tolerance'] ?? 0.001)
+        );
         $boundaryFeatures[] = $boundary;
 
         $placeData = app_json_decode(
@@ -150,6 +154,137 @@ function app_fetch_analysis_geography(array $config): array
         ],
         'source' => 'Danmarks Statistik BY3 og Dataforsyningen',
     ];
+}
+
+function app_simplify_geometry(array $geometry, float $tolerance): array
+{
+    if ($tolerance <= 0) {
+        return $geometry;
+    }
+
+    $type = $geometry['type'] ?? null;
+    $coordinates = $geometry['coordinates'] ?? null;
+    if (!is_array($coordinates)) {
+        return $geometry;
+    }
+
+    if ($type === 'Polygon') {
+        $geometry['coordinates'] = array_map(
+            static fn (array $ring): array => app_simplify_ring($ring, $tolerance),
+            $coordinates
+        );
+    } elseif ($type === 'MultiPolygon') {
+        $geometry['coordinates'] = array_map(
+            static fn (array $polygon): array => array_map(
+                static fn (array $ring): array => app_simplify_ring($ring, $tolerance),
+                $polygon
+            ),
+            $coordinates
+        );
+    }
+
+    return $geometry;
+}
+
+function app_simplify_ring(array $ring, float $tolerance): array
+{
+    if (count($ring) <= 5) {
+        return $ring;
+    }
+
+    $points = $ring;
+    if ($points[0] === $points[count($points) - 1]) {
+        array_pop($points);
+    }
+    if (count($points) <= 4) {
+        return $ring;
+    }
+
+    $anchor = $points[0];
+    $furthestIndex = 1;
+    $furthestDistance = -1.0;
+    foreach ($points as $index => $point) {
+        $distance = app_coordinate_distance_squared($anchor, $point);
+        if ($distance > $furthestDistance) {
+            $furthestDistance = $distance;
+            $furthestIndex = $index;
+        }
+    }
+
+    $firstPath = array_slice($points, 0, $furthestIndex + 1);
+    $secondPath = array_merge(array_slice($points, $furthestIndex), [$points[0]]);
+    $firstSimplified = app_simplify_line($firstPath, $tolerance);
+    $secondSimplified = app_simplify_line($secondPath, $tolerance);
+    $simplified = array_merge(
+        array_slice($firstSimplified, 0, -1),
+        array_slice($secondSimplified, 0, -1)
+    );
+
+    if (count($simplified) < 3) {
+        return $ring;
+    }
+    $simplified[] = $simplified[0];
+
+    return $simplified;
+}
+
+function app_simplify_line(array $points, float $tolerance): array
+{
+    $lastIndex = count($points) - 1;
+    if ($lastIndex < 2) {
+        return $points;
+    }
+
+    $keep = [0 => true, $lastIndex => true];
+    $stack = [[0, $lastIndex]];
+    $toleranceSquared = $tolerance * $tolerance;
+
+    while ($stack !== []) {
+        [$start, $end] = array_pop($stack);
+        $maximumDistance = 0.0;
+        $maximumIndex = null;
+        for ($index = $start + 1; $index < $end; $index += 1) {
+            $distance = app_segment_distance_squared($points[$index], $points[$start], $points[$end]);
+            if ($distance > $maximumDistance) {
+                $maximumDistance = $distance;
+                $maximumIndex = $index;
+            }
+        }
+        if ($maximumIndex !== null && $maximumDistance > $toleranceSquared) {
+            $keep[$maximumIndex] = true;
+            $stack[] = [$start, $maximumIndex];
+            $stack[] = [$maximumIndex, $end];
+        }
+    }
+
+    ksort($keep);
+    return array_map(static fn (int $index): array => $points[$index], array_keys($keep));
+}
+
+function app_segment_distance_squared(array $point, array $start, array $end): float
+{
+    $dx = (float) $end[0] - (float) $start[0];
+    $dy = (float) $end[1] - (float) $start[1];
+    if ($dx === 0.0 && $dy === 0.0) {
+        return app_coordinate_distance_squared($point, $start);
+    }
+
+    $projection = (((float) $point[0] - (float) $start[0]) * $dx
+        + ((float) $point[1] - (float) $start[1]) * $dy) / ($dx * $dx + $dy * $dy);
+    $projection = max(0.0, min(1.0, $projection));
+    $nearest = [
+        (float) $start[0] + $projection * $dx,
+        (float) $start[1] + $projection * $dy,
+    ];
+
+    return app_coordinate_distance_squared($point, $nearest);
+}
+
+function app_coordinate_distance_squared(array $first, array $second): float
+{
+    $dx = (float) $first[0] - (float) $second[0];
+    $dy = (float) $first[1] - (float) $second[1];
+    return $dx * $dx + $dy * $dy;
 }
 
 function app_parse_semicolon_csv(string $csv): array

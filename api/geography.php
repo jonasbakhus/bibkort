@@ -14,7 +14,8 @@ foreach ($config['cities'] as $city) {
     $codes[$city['municipalityCode']] = true;
 }
 ksort($codes);
-$cacheKey = 'analysis-geography-v1-' . sha1(json_encode(array_keys($codes)));
+$simplifyTolerance = (float) ($config['geography']['boundary_simplify_tolerance'] ?? 0.001);
+$cacheKey = 'analysis-geography-v2-' . sha1(json_encode([array_keys($codes), $simplifyTolerance]));
 
 try {
     $cached = app_cache_read($cacheKey, $ttl);

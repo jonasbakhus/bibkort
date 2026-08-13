@@ -5,6 +5,7 @@ Projektet bruger to permanente grene og to subdomæner:
 | Gren | Miljø | Webrod |
 | --- | --- | --- |
 | `develop` | `testbibkort.landogbyforeningen.dk` | `~/testbibkort` |
+| `develop` (Google-variant) | `testbibg.landogbyforeningen.dk` | `~/testbibg` |
 | `main` | `bibkort.landogbyforeningen.dk` | `~/bibkort` |
 
 ## Dagligt arbejde
@@ -14,7 +15,26 @@ Projektet bruger to permanente grene og to subdomæner:
 3. Når versionen er godkendt, merges `develop` til `main`.
 4. `main` publiceres på produktionssubdomænet og får et versions-tag.
 
-Testmiljøet får automatisk `noindex`, når værtsnavnet begynder med `testbibkort.`.
+Begge testmiljøer får automatisk `noindex`.
+
+## Google-testmiljø
+
+`scripts/deploy-google-test.sh` udgiver samme `develop`-commit til `~/testbibg`. Miljøets egen `config/secrets.php` skal indeholde:
+
+```php
+'variant' => 'google',
+'google_isochrones_api_key' => 'SERVER_SIDE_API_NØGLE',
+```
+
+Nøglen må kun have adgang til Google Maps Platform Isochrones API. Sæt en lav dagskvote og en budgetalarm i Google Cloud. Nøglen bruges kun fra PHP på serveren og sendes aldrig til browseren eller GitHub.
+
+Google-testens `.htaccess` kræver HTTP Basic Auth og sender `X-Robots-Tag: noindex`; dens `robots.txt` afviser desuden alle robotter. Adgangs- og health check-oplysninger ligger uden for webroden i `~/.testbibg-htpasswd` og `~/.testbibg-health-auth`.
+
+Cronjobbet er:
+
+```cron
+* * * * * /usr/bin/flock -n $HOME/.bibkort-google-test-deploy.lock $HOME/testbibg/scripts/deploy-google-test.sh >> $HOME/.bibkort-google-test-deploy.log 2>&1
+```
 
 ## Automatisk deploy til test
 

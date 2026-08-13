@@ -5,6 +5,8 @@ declare(strict_types=1);
 $config = require __DIR__ . '/config/app.php';
 $clientConfig = [
     'name' => $config['name'],
+    'variant' => $config['variant'],
+    'reachability' => $config['routing']['reachability'],
     'defaultOrigin' => $config['default_origin'],
     'comparisonOrigin' => $config['comparison_origin'],
     'origins' => $config['origins'],
@@ -21,7 +23,7 @@ $assetVersion = max(
     (int) filemtime(__DIR__ . '/assets/js/app.js')
 );
 $host = strtolower((string) ($_SERVER['HTTP_HOST'] ?? ''));
-$isStaging = str_starts_with($host, 'testbibkort.');
+$isStaging = str_starts_with($host, 'testbibkort.') || str_starts_with($host, 'testbibg.');
 ?>
 <!doctype html>
 <html lang="da">
@@ -55,7 +57,7 @@ $isStaging = str_starts_with($host, 'testbibkort.');
 
         <aside class="info-panel">
             <header class="hero">
-                <p class="eyebrow">Lemvig Kommune</p>
+                <p class="eyebrow"><?= $config['variant'] === 'google' ? 'Google-test · ' : '' ?>Lemvig Kommune</p>
                 <h1>Arbejdsmarkedskort</h1>
                 <p class="intro" id="origin-intro">Udforsk og sammenlign arbejdsmarkedsoplande fra kommunens byer og lokalsamfund.</p>
             </header>
@@ -97,30 +99,30 @@ $isStaging = str_starts_with($host, 'testbibkort.');
                     </div>
                     <span id="reached-summary" class="reach-pill">Indlæser…</span>
                 </div>
-                <input id="time-slider" type="range" min="15" max="90" step="5" value="45" aria-label="Maksimal køretid i minutter">
-                <div class="range-labels" aria-hidden="true"><span>15 min</span><span>90 min</span></div>
+                <input id="time-slider" type="range" min="<?= (int) $config['slider']['min'] ?>" max="<?= (int) $config['slider']['max'] ?>" step="<?= (int) $config['slider']['step'] ?>" value="<?= (int) $config['slider']['default'] ?>" aria-label="Maksimal køretid i minutter">
+                <div class="range-labels" aria-hidden="true"><span><?= (int) $config['slider']['min'] ?> min</span><span><?= (int) $config['slider']['max'] ?> min</span></div>
             </section>
 
             <div id="data-status" class="data-status" role="status" aria-live="polite">Henter aktuelle køretider og jobtal…</div>
 
-            <div id="single-results">
+            <div id="single-results" aria-busy="true">
                 <section class="metrics" aria-label="Nøgletal">
                     <article class="metric-card metric-primary">
                         <span class="metric-label">Anslåede job i zonen</span>
-                        <strong id="metric-jobs">—</strong>
-                        <small id="metric-year">ERHV2</small>
+                        <strong id="metric-jobs" class="is-loading-value">Beregner…</strong>
+                        <small id="metric-year">Beregner grundlag…</small>
                     </article>
                     <article class="metric-card">
                         <span class="metric-label">Anslåede arbejdssteder</span>
-                        <strong id="metric-workplaces">—</strong>
+                        <strong id="metric-workplaces" class="is-loading-value">Beregner…</strong>
                     </article>
                     <article class="metric-card">
                         <span class="metric-label">Arbejdsmarkedsbyer nået</span>
-                        <strong id="metric-cities">—</strong>
+                        <strong id="metric-cities" class="is-loading-value">Beregner…</strong>
                     </article>
                     <article class="metric-card">
                         <span class="metric-label">Største nåede by</span>
-                        <strong id="metric-largest" class="metric-name">—</strong>
+                        <strong id="metric-largest" class="metric-name is-loading-value">Beregner…</strong>
                     </article>
                 </section>
 
@@ -158,7 +160,11 @@ $isStaging = str_starts_with($host, 'testbibkort.');
 
             <section class="method-note" aria-labelledby="method-title">
                 <h2 id="method-title">Om tallene</h2>
-                <p>Køretidsfladen følger vejnettet. Byernes start- og slutpunkter følger Google Maps. TravelTime er lokalt kalibreret mod Bækmarksbro–Gødstrup og Thyborøn–Struer, som begge er 44 minutter i Google Directions.</p>
+                <?php if ($config['variant'] === 'google'): ?>
+                    <p>Køretidsfladen beregnes direkte med Google Maps Isochrones uden lokale særregler mellem bestemte byer. Zonen bruger statiske køretider, så den er stabil som planlægningskort og ikke skifter med trafikken.</p>
+                <?php else: ?>
+                    <p>Køretidsfladen følger vejnettet. Byernes start- og slutpunkter følger Google Maps. TravelTime er lokalt kalibreret mod Bækmarksbro–Gødstrup og Thyborøn–Struer, som begge er 44 minutter i Google Directions.</p>
+                <?php endif; ?>
                 <p>Præcise jobtal pr. adresse er ikke offentligt tilgængelige. Derfor fordeles 90 % af kommunens ERHV2-tal på officielle byområder efter deres BY3-befolkning; en byandel tæller, når bymidten ligger i zonen. De sidste 10 % fordeles efter, hvor stor en del af kommunens landareal zonen dækker. Resultaterne er modelberegnede anslåede tal.</p>
             </section>
 
@@ -168,7 +174,9 @@ $isStaging = str_starts_with($host, 'testbibkort.');
                 <a href="https://www.statbank.dk/BY3" target="_blank" rel="noopener">Danmarks Statistik / BY3</a>
                 <a href="https://dataforsyningen.dk/" target="_blank" rel="noopener">Dataforsyningen</a>
                 <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a>
-                <?php if ($config['routing']['provider'] === 'TravelTime'): ?>
+                <?php if ($config['variant'] === 'google'): ?>
+                    <a href="https://developers.google.com/maps/documentation/isochrones" target="_blank" rel="noopener" translate="no">Google Maps</a>
+                <?php elseif ($config['routing']['provider'] === 'TravelTime'): ?>
                     <a href="https://traveltime.com/" target="_blank" rel="noopener">TravelTime routing</a>
                 <?php else: ?>
                     <a href="https://valhalla.github.io/valhalla/" target="_blank" rel="noopener">Valhalla routing</a>

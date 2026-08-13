@@ -11,6 +11,7 @@ function app_json_response(array $payload, int $status = 200): void
     header('Content-Type: application/json; charset=utf-8');
     header('X-Content-Type-Options: nosniff');
     header('Cache-Control: no-store');
+    header('Vary: Accept-Encoding');
 
     $json = json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
     if ($json === false) {
@@ -19,6 +20,18 @@ function app_json_response(array $payload, int $status = 200): void
         exit;
     }
 
+    $acceptEncoding = (string) ($_SERVER['HTTP_ACCEPT_ENCODING'] ?? '');
+    if (str_contains($acceptEncoding, 'gzip') && function_exists('gzencode')) {
+        $compressed = gzencode($json, 6);
+        if (is_string($compressed)) {
+            header('Content-Encoding: gzip');
+            header('Content-Length: ' . strlen($compressed));
+            echo $compressed;
+            exit;
+        }
+    }
+
+    header('Content-Length: ' . strlen($json));
     echo $json;
     exit;
 }

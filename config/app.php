@@ -13,10 +13,14 @@ if (is_file($secretsFile)) {
 
 $travelTimeAppId = getenv('BIBKORT_TRAVELTIME_APP_ID') ?: ($secrets['traveltime_app_id'] ?? '');
 $travelTimeApiKey = getenv('BIBKORT_TRAVELTIME_API_KEY') ?: ($secrets['traveltime_api_key'] ?? '');
+$googleIsochronesApiKey = getenv('BIBKORT_GOOGLE_ISOCHRONES_API_KEY') ?: ($secrets['google_isochrones_api_key'] ?? '');
+$variant = getenv('BIBKORT_VARIANT') ?: ($secrets['variant'] ?? 'standard');
+$isGoogleVariant = $variant === 'google';
 $preferredRoutingProvider = $travelTimeAppId !== '' && $travelTimeApiKey !== '' ? 'TravelTime' : 'Valhalla';
 
 return [
     'name' => 'Arbejdsmarkedskort for Lemvig Kommune',
+    'variant' => $isGoogleVariant ? 'google' : 'standard',
     'default_origin' => 'baekmarksbro',
     'comparison_origin' => 'lemvig',
     'origins' => [
@@ -158,16 +162,20 @@ return [
     ],
     'slider' => [
         'min' => 15,
-        'max' => 90,
+        'max' => $isGoogleVariant ? 60 : 90,
         'step' => 5,
         'default' => 45,
     ],
     'routing' => [
         'provider' => getenv('BIBKORT_ROUTING_PROVIDER') ?: $preferredRoutingProvider,
+        'isochrone_provider' => $isGoogleVariant ? 'GoogleIsochrones' : (getenv('BIBKORT_ROUTING_PROVIDER') ?: $preferredRoutingProvider),
+        'reachability' => $isGoogleVariant ? 'zone' : 'matrix',
         'base_url' => getenv('BIBKORT_VALHALLA_URL') ?: 'https://valhalla1.openstreetmap.de',
         'traveltime_base_url' => 'https://api.traveltimeapp.com/v4',
         'traveltime_app_id' => (string) $travelTimeAppId,
         'traveltime_api_key' => (string) $travelTimeApiKey,
+        'google_isochrones_base_url' => 'https://isochrones.googleapis.com',
+        'google_isochrones_api_key' => (string) $googleIsochronesApiKey,
         // Standard: Bækmarksbro–Gødstrup, 2.640 faktiske sekunder / 2.804 modelsekunder.
         'travel_time_factor' => 2640 / 2804,
         // Google Directions-reference for udgangspunkter, hvor standardfaktoren ikke rammer lokalt.
@@ -185,6 +193,8 @@ return [
         'population_table' => 'BY3',
         'urban_weight' => 0.90,
         'rural_weight' => 0.10,
+        // Ca. 100 meter. Landzoneandelen er kun 10 %, så denne præcision er rigelig og langt hurtigere.
+        'boundary_simplify_tolerance' => 0.001,
         'cache_ttl' => 30 * 24 * 60 * 60,
     ],
     // Byer og deres kommune er samlet her, så listen kan udvides ét sted.

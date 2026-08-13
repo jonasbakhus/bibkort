@@ -20,6 +20,8 @@
         geography: null,
         geographyReady: false,
         geographyError: null,
+        settlementsByMunicipality: new Map(),
+        municipalityBoundaries: new Map(),
         markers: new Map(),
         scenarios: {
             primary: makeScenario('primary', primaryId),
@@ -75,6 +77,9 @@
         maxZoom: 19,
         attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
     }).addTo(map);
+    if (config.variant === 'google') {
+        map.attributionControl.addAttribution('<span class="google-maps-attribution" translate="no">Google Maps</span>');
+    }
 
     config.cities.forEach((city) => {
         const marker = L.circleMarker([city.lat, city.lon], markerStyle('muted', 0)).addTo(map);
@@ -126,11 +131,21 @@
     elements.slider.addEventListener('input', () => {
         state.minutes = Number(elements.slider.value);
         updateSliderProgress();
+        activeScenarios().forEach((scenario) => {
+            scenario.isochroneRequest += 1;
+            scenario.isochroneLoading = true;
+            scenario.isochroneError = null;
+            scenario.geojson = null;
+            scenario.zoneMinutes = null;
+            removeScenarioLayer(scenario);
+            invalidateAnalysis(scenario);
+        });
         render();
         window.clearTimeout(isochroneTimer);
+        const requestedMinutes = state.minutes;
         isochroneTimer = window.setTimeout(() => {
-            loadIsochrone(state.scenarios.primary);
-            if (state.comparing) loadIsochrone(state.scenarios.secondary);
+            loadIsochrone(state.scenarios.primary, requestedMinutes);
+            if (state.comparing) loadIsochrone(state.scenarios.secondary, requestedMinutes);
         }, 220);
     });
 
@@ -161,6 +176,11 @@
             isochroneRequest: 0,
             isochroneLoading: false,
             isochroneError: null,
+            zoneMinutes: null,
+            analysisRequest: 0,
+            analysisStatus: 'idle',
+            analysis: null,
+            analysisError: null,
         };
     }
 
@@ -206,6 +226,8 @@
         scenario.routingReady = false;
         scenario.routeError = null;
         scenario.geojson = null;
+        scenario.zoneMinutes = null;
+        invalidateAnalysis(scenario);
         scenario.routingRequest += 1;
         scenario.isochroneRequest += 1;
         removeScenarioLayer(scenario);
@@ -259,6 +281,7 @@
             state.statsYear = response.year;
             state.statsReady = true;
             state.statsError = response.warning || null;
+            queueActiveAnalyses();
         } catch (error) {
             state.statsError = error.message;
         }
@@ -269,23 +292,27 @@
         try {
             const response = await fetchJson(config.endpoints.geography);
             state.geography = response;
+            indexGeography(response);
             state.geographyReady = true;
             state.geographyError = response.warning || null;
+            queueActiveAnalyses();
         } catch (error) {
             state.geographyError = error.message;
         }
         render();
     }
 
-    async function loadIsochrone(scenario) {
+    async function loadIsochrone(scenario, requestedMinutes = state.minutes) {
         const requestId = ++scenario.isochroneRequest;
         scenario.isochroneLoading = true;
         scenario.isochroneError = null;
-        updateMapLoading();
+        invalidateAnalysis(scenario);
+        render();
         try {
-            const response = await fetchJson(`${config.endpoints.routing}?action=isochrone&minutes=${state.minutes}&origin=${encodeURIComponent(scenario.originId)}`);
+            const response = await fetchJson(`${config.endpoints.routing}?action=isochrone&minutes=${requestedMinutes}&origin=${encodeURIComponent(scenario.originId)}`);
             if (requestId !== scenario.isochroneRequest) return;
             scenario.geojson = response.geojson;
+            scenario.zoneMinutes = requestedMinutes;
             removeScenarioLayer(scenario);
             scenario.layer = L.geoJSON(response.geojson, {
                 pane: `isochrone-${scenario.key}`,
@@ -298,8 +325,8 @@
             if (requestId === scenario.isochroneRequest) scenario.isochroneError = error.message;
         } finally {
             if (requestId === scenario.isochroneRequest) scenario.isochroneLoading = false;
-            updateMapLoading();
             render();
+            if (requestId === scenario.isochroneRequest && scenario.geojson) queueAnalysis(scenario);
         }
     }
 
@@ -332,10 +359,12 @@
             ? `${primary.origin.name} / ${secondary.origin.name}`
             : `fra ${primary.origin.name}`;
         elements.reached.textContent = state.comparing
-            ? `A: ${primaryResult.reachedCities.length} · B: ${secondaryResult?.reachedCities.length ?? 0}`
-            : primary.routingReady
+            ? primaryResult.ready && secondaryResult?.ready
+                ? `A: ${primaryResult.reachedCities.length} · B: ${secondaryResult.reachedCities.length}`
+                : 'Beregner begge zoner…'
+            : primaryResult.ready
                 ? `${primaryResult.reachedCities.length} af ${primary.cities.length} byer nås`
-                : 'Beregner ruter…';
+                : 'Beregner zone og tal…';
 
         renderStatus();
         if (state.comparing) {
@@ -345,24 +374,28 @@
         }
         renderCityList();
         updateMarkers();
+        updateMapLoading();
     }
 
     function calculateScenario(scenario) {
         const reachedCities = scenario.routingReady
-            ? scenario.cities.filter((city) => city.travelSeconds !== null && city.travelSeconds <= state.minutes * 60)
+            ? scenario.cities.filter((city) => config.reachability === 'zone' && scenario.geojson
+                ? pointInZone(city.lon, city.lat, scenario.geojson)
+                : city.travelSeconds !== null && city.travelSeconds <= state.minutes * 60)
             : [];
-        const empty = { reachedCities, jobs: null, workplaces: null, largest: null, branches: [], coverage: {} };
-        if (!state.statsReady || !state.geographyReady || !scenario.geojson || typeof turf === 'undefined') return empty;
+        const analysisCurrent = scenario.analysisStatus === 'ready'
+            && scenario.zoneMinutes === state.minutes
+            && scenario.analysis;
+        const calculationError = state.statsError || state.geographyError || (!scenario.routingReady ? scenario.routeError : null) || scenario.isochroneError || scenario.analysisError;
+        if (!analysisCurrent || !scenario.routingReady) {
+            return { ready: false, error: calculationError, reachedCities, jobs: null, workplaces: null, largest: null, branches: [], coverage: {} };
+        }
+        const largest = [...reachedCities]
+            .sort((a, b) => estimatedCityJobs(b, scenario.analysis.coverage) - estimatedCityJobs(a, scenario.analysis.coverage))[0] || null;
+        return { ready: true, reachedCities, largest, ...scenario.analysis };
+    }
 
-        const settlementsByMunicipality = new Map();
-        state.geography.settlements.forEach((settlement) => {
-            const group = settlementsByMunicipality.get(settlement.municipalityCode) || [];
-            group.push(settlement);
-            settlementsByMunicipality.set(settlement.municipalityCode, group);
-        });
-        const boundaries = new Map(
-            (state.geography.municipalities?.features || []).map((feature) => [String(feature.properties.code), feature])
-        );
+    function calculateZoneMetrics(scenario) {
         const coverage = {};
         const branchTotals = new Map();
         let jobs = 0;
@@ -371,13 +404,13 @@
         let hasWorkplaces = false;
 
         Object.entries(state.municipalities).forEach(([code, municipality]) => {
-            const settlements = settlementsByMunicipality.get(code) || [];
+            const settlements = state.settlementsByMunicipality.get(code) || [];
             const totalPopulation = settlements.reduce((sum, settlement) => sum + settlement.population, 0);
             const coveredPopulation = settlements
                 .filter((settlement) => pointInZone(settlement.lon, settlement.lat, scenario.geojson))
                 .reduce((sum, settlement) => sum + settlement.population, 0);
             const urbanCoverage = totalPopulation > 0 ? coveredPopulation / totalPopulation : 0;
-            const ruralCoverage = polygonCoverage(boundaries.get(code), scenario.geojson);
+            const ruralCoverage = polygonCoverage(state.municipalityBoundaries.get(code), scenario.geojson);
             const factor = clamp(
                 state.geography.weights.urban * urbanCoverage + state.geography.weights.rural * ruralCoverage,
                 0,
@@ -400,18 +433,63 @@
             });
         });
 
-        const largest = [...reachedCities].sort((a, b) => estimatedCityJobs(b, coverage) - estimatedCityJobs(a, coverage))[0] || null;
         return {
-            reachedCities,
             jobs: hasJobs ? Math.round(jobs) : null,
             workplaces: hasWorkplaces ? Math.round(workplaces) : null,
-            largest,
             branches: [...branchTotals.values()]
                 .map((branch) => ({ ...branch, jobs: Math.round(branch.jobs) }))
                 .sort((a, b) => b.jobs - a.jobs)
                 .slice(0, 6),
             coverage,
         };
+    }
+
+    function indexGeography(geography) {
+        state.settlementsByMunicipality = new Map();
+        (geography.settlements || []).forEach((settlement) => {
+            const code = String(settlement.municipalityCode);
+            const group = state.settlementsByMunicipality.get(code) || [];
+            group.push(settlement);
+            state.settlementsByMunicipality.set(code, group);
+        });
+        state.municipalityBoundaries = new Map(
+            (geography.municipalities?.features || []).map((feature) => [String(feature.properties.code), feature])
+        );
+    }
+
+    function activeScenarios() {
+        return state.comparing ? Object.values(state.scenarios) : [state.scenarios.primary];
+    }
+
+    function invalidateAnalysis(scenario) {
+        scenario.analysisRequest += 1;
+        scenario.analysisStatus = 'idle';
+        scenario.analysis = null;
+        scenario.analysisError = null;
+    }
+
+    function queueActiveAnalyses() {
+        activeScenarios().forEach(queueAnalysis);
+    }
+
+    function queueAnalysis(scenario) {
+        if (!state.statsReady || !state.geographyReady || !scenario.geojson || scenario.isochroneLoading || scenario.zoneMinutes !== state.minutes || typeof turf === 'undefined') return;
+        const requestId = ++scenario.analysisRequest;
+        scenario.analysisStatus = 'loading';
+        scenario.analysis = null;
+        scenario.analysisError = null;
+        render();
+        window.setTimeout(() => {
+            if (requestId !== scenario.analysisRequest) return;
+            try {
+                scenario.analysis = calculateZoneMetrics(scenario);
+                scenario.analysisStatus = 'ready';
+            } catch (error) {
+                scenario.analysisError = 'De geografiske tal kunne ikke beregnes.';
+                scenario.analysisStatus = 'error';
+            }
+            render();
+        }, 0);
     }
 
     function pointInZone(lon, lat, geojson) {
@@ -445,12 +523,12 @@
     }
 
     function renderStatus() {
-        const active = state.comparing ? Object.values(state.scenarios) : [state.scenarios.primary];
-        const errors = [state.statsError, state.geographyError, ...active.flatMap((scenario) => [scenario.routeError, scenario.isochroneError])].filter(Boolean);
+        const active = activeScenarios();
+        const errors = [state.statsError, state.geographyError, ...active.flatMap((scenario) => [scenario.routeError, scenario.isochroneError, scenario.analysisError])].filter(Boolean);
         if (errors.length > 0) {
             elements.status.textContent = [...new Set(errors)].join(' ');
             elements.status.className = 'data-status is-warning';
-        } else if (state.statsReady && state.geographyReady && active.every((scenario) => scenario.routingReady && scenario.geojson)) {
+        } else if (state.statsReady && state.geographyReady && active.every((scenario) => scenario.routingReady && scenario.analysisStatus === 'ready')) {
             elements.status.textContent = `ERHV2 ${state.statsYear} · BY3 ${state.geography.year} · geografisk 90/10-model.`;
             elements.status.className = 'data-status is-ready';
         } else {
@@ -460,12 +538,14 @@
     }
 
     function renderSingle(result) {
-        elements.jobs.textContent = formatKnown(result.jobs);
-        elements.workplaces.textContent = formatKnown(result.workplaces);
-        elements.cities.textContent = state.scenarios.primary.routingReady ? numberFormat.format(result.reachedCities.length) : '—';
-        elements.largest.textContent = result.largest?.name || (result.reachedCities.length ? 'Afventer model' : 'Ingen endnu');
-        elements.year.textContent = state.statsYear ? `ERHV2 · ${state.statsYear} · anslået` : 'ERHV2';
-        renderBranchChart(elements.branches, result.branches);
+        const placeholder = result.error ? 'Kan ikke beregnes' : 'Beregner…';
+        setValue(elements.jobs, result.ready ? formatKnown(result.jobs) : placeholder, !result.ready && !result.error, Boolean(result.error));
+        setValue(elements.workplaces, result.ready ? formatKnown(result.workplaces) : placeholder, !result.ready && !result.error, Boolean(result.error));
+        setValue(elements.cities, result.ready ? numberFormat.format(result.reachedCities.length) : placeholder, !result.ready && !result.error, Boolean(result.error));
+        setValue(elements.largest, result.ready ? (result.largest?.name || 'Ingen endnu') : placeholder, !result.ready && !result.error, Boolean(result.error));
+        elements.year.textContent = result.ready && state.statsYear ? `ERHV2 · ${state.statsYear} · anslået` : (result.error ? 'Datafejl' : 'Beregner grundlag…');
+        renderBranchChart(elements.branches, result.branches, undefined, !result.ready && !result.error, result.error);
+        elements.singleResults.setAttribute('aria-busy', String(!result.ready));
     }
 
     function renderComparison(primaryResult, secondaryResult) {
@@ -474,14 +554,24 @@
         Object.entries(results).forEach(([key, result]) => {
             const target = elements.compare[key];
             target.name.textContent = state.scenarios[key].origin.name;
-            target.jobs.textContent = formatKnown(result.jobs);
-            target.workplaces.textContent = formatKnown(result.workplaces);
-            target.cities.textContent = state.scenarios[key].routingReady ? numberFormat.format(result.reachedCities.length) : '—';
-            renderBranchChart(target.branches, result.branches, sharedMaximum);
+            const placeholder = result.error ? 'Fejl' : 'Beregner…';
+            setValue(target.jobs, result.ready ? formatKnown(result.jobs) : placeholder, !result.ready && !result.error, Boolean(result.error));
+            setValue(target.workplaces, result.ready ? formatKnown(result.workplaces) : placeholder, !result.ready && !result.error, Boolean(result.error));
+            setValue(target.cities, result.ready ? numberFormat.format(result.reachedCities.length) : placeholder, !result.ready && !result.error, Boolean(result.error));
+            renderBranchChart(target.branches, result.branches, sharedMaximum, !result.ready && !result.error, result.error);
         });
+        elements.comparisonResults.setAttribute('aria-busy', String(!primaryResult.ready || !secondaryResult.ready));
     }
 
-    function renderBranchChart(target, branches, maximum = branches[0]?.jobs || 1) {
+    function renderBranchChart(target, branches, maximum = branches[0]?.jobs || 1, loading = false, error = null) {
+        if (error) {
+            target.innerHTML = '<p class="empty-state is-error">Tallene kunne ikke beregnes.</p>';
+            return;
+        }
+        if (loading) {
+            target.innerHTML = '<div class="loading-chart" role="status"><span></span><span></span><span></span><small>Beregner brancher…</small></div>';
+            return;
+        }
         if (!state.statsReady || branches.length === 0) {
             target.innerHTML = `<p class="empty-state">${state.statsReady ? 'Zonen dækker endnu ingen beregnede job.' : 'Venter på jobtal…'}</p>`;
             return;
@@ -497,10 +587,19 @@
     function renderCityList() {
         const primary = state.scenarios.primary;
         const secondary = state.scenarios.secondary;
-        if (!primary.routingReady || (state.comparing && !secondary.routingReady)) {
-            elements.cityList.innerHTML = '<p class="empty-state">Beregner ruter…</p>';
+        const failed = activeScenarios().some((scenario) => (!scenario.routingReady && scenario.routeError) || scenario.isochroneError || scenario.analysisError) || state.statsError || state.geographyError;
+        if (failed) {
+            elements.cityList.innerHTML = '<p class="empty-state is-error">Bydata kunne ikke beregnes lige nu.</p>';
+            elements.cityList.setAttribute('aria-busy', 'false');
             return;
         }
+        const pending = activeScenarios().some((scenario) => !scenario.routingReady || scenario.isochroneLoading || scenario.analysisStatus !== 'ready' || scenario.zoneMinutes !== state.minutes);
+        if (pending) {
+            elements.cityList.innerHTML = '<div class="loading-list" role="status"><span></span><span></span><span></span><p>Beregner byer og køretider…</p></div>';
+            elements.cityList.setAttribute('aria-busy', 'true');
+            return;
+        }
+        elements.cityList.setAttribute('aria-busy', 'false');
         const cities = [...primary.cities].sort((a, b) => {
             const aTime = state.comparing ? Math.min(a.travelSeconds ?? Infinity, cityFor(secondary, a.id)?.travelSeconds ?? Infinity) : a.travelSeconds ?? Infinity;
             const bTime = state.comparing ? Math.min(b.travelSeconds ?? Infinity, cityFor(secondary, b.id)?.travelSeconds ?? Infinity) : b.travelSeconds ?? Infinity;
@@ -551,11 +650,12 @@
     }
 
     function combinedCityStatus(cityId) {
+        if (activeScenarios().some((scenario) => !scenario.routingReady || scenario.isochroneLoading || scenario.analysisStatus !== 'ready' || scenario.zoneMinutes !== state.minutes)) return 'muted';
         const primary = cityFor(state.scenarios.primary, cityId);
         const secondary = cityFor(state.scenarios.secondary, cityId);
-        const primaryReached = cityReached(primary);
-        if (!state.comparing) return singleCityStatus(primary);
-        const secondaryReached = cityReached(secondary);
+        const primaryReached = cityReached(state.scenarios.primary, primary);
+        if (!state.comparing) return singleCityStatus(state.scenarios.primary, primary);
+        const secondaryReached = cityReached(state.scenarios.secondary, secondary);
         if (primaryReached && secondaryReached) return 'both';
         if (primaryReached) return 'reached';
         if (secondaryReached) return 'secondary';
@@ -563,14 +663,16 @@
         return near ? 'near' : 'muted';
     }
 
-    function singleCityStatus(city) {
+    function singleCityStatus(scenario, city) {
         if (!city || city.travelSeconds === null) return 'muted';
+        if (config.reachability === 'zone') return cityReached(scenario, city) ? 'reached' : 'muted';
         const difference = city.travelSeconds / 60 - state.minutes;
         if (Math.abs(difference) <= 5) return 'near';
         return difference <= 0 ? 'reached' : 'muted';
     }
 
-    function cityReached(city) {
+    function cityReached(scenario, city) {
+        if (config.reachability === 'zone' && scenario.geojson && city) return pointInZone(city.lon, city.lat, scenario.geojson);
         return city?.travelSeconds !== null && city?.travelSeconds !== undefined && city.travelSeconds <= state.minutes * 60;
     }
 
@@ -607,8 +709,8 @@
     }
 
     function updateMapLoading() {
-        const active = state.comparing ? Object.values(state.scenarios) : [state.scenarios.primary];
-        if (active.some((scenario) => scenario.isochroneLoading)) {
+        const active = activeScenarios();
+        if (active.some((scenario) => scenario.isochroneLoading || scenario.analysisStatus === 'loading')) {
             elements.mapLoading.textContent = state.comparing ? `Beregner to ${state.minutes}-minutters zoner…` : `Beregner ${state.minutes}-minutters zone…`;
             elements.mapLoading.classList.remove('is-hidden', 'is-error');
         } else if (active.some((scenario) => scenario.isochroneError)) {
@@ -664,6 +766,12 @@
 
     function formatKnown(value) {
         return value === null ? '—' : numberFormat.format(value);
+    }
+
+    function setValue(element, value, loading, error = false) {
+        element.textContent = value;
+        element.classList.toggle('is-loading-value', loading);
+        element.classList.toggle('is-error-value', error);
     }
 
     function shortBranchName(name) {
