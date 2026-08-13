@@ -138,7 +138,15 @@
             button.addEventListener('click', () => {
                 const key = button.dataset.selectOrigin;
                 const originId = button.dataset.originId;
-                if (!['primary', 'secondary'].includes(key) || !validOrigin(originId)) return;
+                if (!['primary', 'secondary', 'compare'].includes(key) || !validOrigin(originId)) return;
+                if (key === 'compare') {
+                    if (!state.scenarios.primary.origin || state.scenarios.primary.originId === originId) return;
+                    state.comparing = true;
+                    applyComparisonMode();
+                    selectOrigin('secondary', originId);
+                    map.closePopup();
+                    return;
+                }
                 selectOrigin(key, originId);
                 map.closePopup();
             });
@@ -931,9 +939,19 @@
     }
 
     function originSelectionActions(originId) {
+        if (!state.scenarios.primary.origin) {
+            return `<div class="city-popup-actions"><button type="button" data-select-origin="primary" data-origin-id="${escapeHtml(originId)}">Vælg udgangspunkt</button></div>`;
+        }
+        if (!state.comparing) {
+            if (state.scenarios.primary.originId === originId) return '';
+            return `<div class="city-popup-actions">
+                <button type="button" data-select-origin="primary" data-origin-id="${escapeHtml(originId)}">Nyt udgangspunkt</button>
+                <button type="button" data-select-origin="compare" data-origin-id="${escapeHtml(originId)}">Sammenlign</button>
+            </div>`;
+        }
         return `<div class="city-popup-actions">
-            <button type="button" data-select-origin="primary" data-origin-id="${escapeHtml(originId)}">${state.comparing ? 'Vælg som A' : 'Vælg udgangspunkt'}</button>
-            ${state.comparing ? `<button type="button" data-select-origin="secondary" data-origin-id="${escapeHtml(originId)}">Vælg som B</button>` : ''}
+            <button type="button" data-select-origin="primary" data-origin-id="${escapeHtml(originId)}">Vælg som A</button>
+            <button type="button" data-select-origin="secondary" data-origin-id="${escapeHtml(originId)}">Vælg som B</button>
         </div>`;
     }
 
