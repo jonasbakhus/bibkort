@@ -78,6 +78,7 @@ function app_fetch_analysis_geography(array $config): array
     $boundaryFeatures = [];
     $places = [];
     foreach ($municipalities as $code => $name) {
+        $code = (string) $code;
         $dawaCode = str_pad($code, 4, '0', STR_PAD_LEFT);
         $boundary = app_json_decode(
             app_http_get('https://api.dataforsyningen.dk/kommuner/' . rawurlencode($dawaCode) . '?format=geojson', 45),
