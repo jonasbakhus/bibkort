@@ -23,8 +23,8 @@ return [
             'id' => 'baekmarksbro',
             'name' => 'Bækmarksbro',
             'description' => 'Primær',
-            'lat' => 56.41647,
-            'lon' => 8.30842,
+            'lat' => 56.42039773538234,
+            'lon' => 8.30641623581447,
         ],
         'thyboroen' => [
             'id' => 'thyboroen',
