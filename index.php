@@ -90,8 +90,11 @@ $isGoogle = $config['variant'] === 'google';
             </header>
 
             <section class="origin-control" aria-labelledby="origin-title">
-                <p class="section-kicker" id="origin-title">Vælg udgangspunkt</p>
-                <div class="origin-toolbar">
+                <div class="origin-control-heading">
+                    <p class="section-kicker" id="origin-title">Vælg udgangspunkt</p>
+                    <button id="compare-toggle" class="compare-toggle" type="button" aria-pressed="false" disabled>Sammenlign A/B</button>
+                </div>
+                <div class="primary-control">
                     <label class="origin-field" for="origin-primary">
                         <span>Udgangspunkt A</span>
                         <select id="origin-primary" required>
@@ -101,7 +104,6 @@ $isGoogle = $config['variant'] === 'google';
                             <?php endforeach; ?>
                         </select>
                     </label>
-                    <button id="compare-toggle" class="compare-toggle" type="button" aria-pressed="false" disabled>Sammenlign A/B</button>
                 </div>
                 <div id="secondary-control" class="secondary-control" hidden>
                     <label class="origin-field" for="origin-secondary">

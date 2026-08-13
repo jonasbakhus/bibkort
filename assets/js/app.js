@@ -868,7 +868,7 @@
             if (!marker) return;
             const status = combinedCityStatus(city.id);
             marker.setStyle(markerStyle(status, status === 'muted' ? 0 : 1));
-            marker.setRadius(status === 'muted' ? 5 : 9);
+            marker.setRadius(status === 'muted' ? 3.5 : 6);
             marker.setPopupContent(cityPopup(city));
             state.touchMarkers.get(city.id)?.setPopupContent(cityPopup(city));
         });
@@ -912,11 +912,11 @@
     }
 
     function markerStyle(status, scale) {
-        if (status === 'reached') return { radius: 7 + scale * 2, color: '#fff', weight: 2.5, fillColor: '#0f766e', fillOpacity: 0.95 };
-        if (status === 'secondary') return { radius: 7 + scale * 2, color: '#fff', weight: 2.5, fillColor: '#6d5bd0', fillOpacity: 0.95 };
-        if (status === 'both') return { radius: 7 + scale * 2, color: '#0f766e', weight: 3, fillColor: '#6d5bd0', fillOpacity: 0.95 };
-        if (status === 'near') return { radius: 8, color: '#fff7df', weight: 3, fillColor: '#e49a23', fillOpacity: 0.95 };
-        return { radius: 5, color: '#64727d', weight: 1.5, fillColor: '#89949d', fillOpacity: 0.55 };
+        if (status === 'reached') return { radius: 6, color: '#fff', weight: 2, fillColor: '#0f766e', fillOpacity: 0.95 };
+        if (status === 'secondary') return { radius: 6, color: '#fff', weight: 2, fillColor: '#6d5bd0', fillOpacity: 0.95 };
+        if (status === 'both') return { radius: 6, color: '#0f766e', weight: 2.5, fillColor: '#6d5bd0', fillOpacity: 0.95 };
+        if (status === 'near') return { radius: 6, color: '#fff7df', weight: 2.5, fillColor: '#e49a23', fillOpacity: 0.95 };
+        return { radius: 3.5, color: '#64727d', weight: 1.25, fillColor: '#89949d', fillOpacity: 0.55 };
     }
 
     function cityPopup(city) {
@@ -1032,8 +1032,8 @@
         return L.divIcon({
             className: `origin-marker-wrap${key === 'secondary' ? ' is-secondary' : ''}`,
             html: `<span class="origin-pulse"></span><span class="origin-marker"></span><span class="origin-label">${escapeHtml(name)}</span>`,
-            iconSize: [18, 18],
-            iconAnchor: [9, 9],
+            iconSize: [24, 24],
+            iconAnchor: [12, 12],
         });
     }
 
