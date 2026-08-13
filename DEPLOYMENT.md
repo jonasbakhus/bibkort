@@ -16,6 +16,18 @@ Projektet bruger to permanente grene og to subdomæner:
 
 Testmiljøet får automatisk `noindex`, når værtsnavnet begynder med `testbibkort.`.
 
+## Automatisk deploy til test
+
+Simply kører `scripts/deploy-test.sh` hvert minut via cron. Scriptet sammenligner den publicerede version med seneste commit på `develop` og gør ingenting, hvis de er ens. Ved et nyt commit hentes præcis den version fra GitHub, alle PHP-filer syntakstestes, og filerne synkroniseres til `~/testbibkort`.
+
+Cronjobbet på Simply er:
+
+```cron
+* * * * * /usr/bin/flock -n $HOME/.bibkort-test-deploy.lock $HOME/testbibkort/scripts/deploy-test.sh >> $HOME/.bibkort-test-deploy.log 2>&1
+```
+
+`config/secrets.php` og genererede cachefiler bevares på serveren. Versionsmarkøren skrives først, når testsidens forside svarer korrekt, og routing-API'et oplyser TravelTime som provider. Ved fejl prøver cronjobbet igen næste minut; detaljer står i `~/.bibkort-test-deploy.log`.
+
 ## Publicér en gren via SSH
 
 Erstat `BRANCH` og `MAPPE` med henholdsvis `develop`/`testbibkort` eller `main`/`bibkort`:
