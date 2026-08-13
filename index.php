@@ -45,7 +45,7 @@ $isStaging = str_starts_with($host, 'testbibkort.');
         <section class="map-region" aria-label="Kort over køretidsområdet">
             <div id="map"></div>
             <div class="map-legend" aria-hidden="true">
-                <span><i class="legend-dot origin-dot"></i><span id="legend-primary">Bækmarksbro</span></span>
+                <span><i class="legend-dot origin-dot"></i><span id="legend-primary">Valgt udgangspunkt</span></span>
                 <span id="legend-secondary-wrap" hidden><i class="legend-dot secondary-dot"></i><span id="legend-secondary">Lemvig</span></span>
                 <span><i class="legend-dot reached-dot"></i>Nået by</span>
                 <span><i class="legend-dot near-dot"></i>Nær grænsen</span>
@@ -151,7 +151,7 @@ $isStaging = str_starts_with($host, 'testbibkort.');
             <section class="panel-section" aria-labelledby="cities-title">
                 <div class="section-heading">
                     <h2 id="cities-title">Byer efter køretid</h2>
-                    <span id="cities-context">fra Bækmarksbro</span>
+                    <span id="cities-context">fra valgt udgangspunkt</span>
                 </div>
                 <div id="city-list" class="city-list"><p class="empty-state">Beregner ruter…</p></div>
             </section>
