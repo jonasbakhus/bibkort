@@ -21,7 +21,7 @@ $preferredRoutingProvider = $travelTimeAppId !== '' && $travelTimeApiKey !== '' 
 $travelTimeCalibration = require __DIR__ . '/routing-calibration.php';
 
 return [
-    'name' => 'Arbejdsmarkedskort for Lemvig Kommune',
+    'name' => 'Joboplandskort for Lemvig Kommune',
     'variant' => $isGoogleVariant ? 'google' : 'standard',
     'default_origin' => null,
     'comparison_origin' => null,

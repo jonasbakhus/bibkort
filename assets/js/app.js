@@ -10,9 +10,13 @@
     const primaryId = validOrigin(params.get('origin')) ? params.get('origin') : null;
     let secondaryId = primaryId && validOrigin(params.get('compare')) ? params.get('compare') : null;
     if (secondaryId === primaryId) secondaryId = null;
+    const requestedMinutes = params.has('minutes') ? Number(params.get('minutes')) : config.slider.default;
+    const initialMinutes = Number.isFinite(requestedMinutes)
+        ? Math.min(config.slider.max, Math.max(config.slider.min, config.slider.min + Math.round((requestedMinutes - config.slider.min) / config.slider.step) * config.slider.step))
+        : config.slider.default;
 
     const state = {
-        minutes: config.slider.default,
+        minutes: initialMinutes,
         comparing: Boolean(primaryId && secondaryId),
         municipalities: {},
         statsYear: null,
@@ -53,7 +57,6 @@
         municipalityBreakdown: document.getElementById('municipality-breakdown'),
         cityList: document.getElementById('city-list'),
         mapLoading: document.getElementById('map-loading'),
-        originIntro: document.getElementById('origin-intro'),
         legendPrimary: document.getElementById('legend-primary'),
         legendSecondary: document.getElementById('legend-secondary'),
         legendSecondaryWrap: document.getElementById('legend-secondary-wrap'),
@@ -177,6 +180,7 @@
     elements.secondarySelect.value = state.scenarios.secondary.originId || '';
     applyComparisonMode();
     updateSliderProgress();
+    updateUrl();
 
     elements.primarySelect.addEventListener('change', () => selectOrigin('primary', elements.primarySelect.value));
     elements.secondarySelect.addEventListener('change', () => selectOrigin('secondary', elements.secondarySelect.value));
@@ -201,6 +205,7 @@
     elements.slider.addEventListener('input', () => {
         state.minutes = Number(elements.slider.value);
         updateSliderProgress();
+        updateUrl();
         activeScenarios().forEach((scenario) => {
             scenario.isochroneRequest += 1;
             scenario.isochroneLoading = true;
@@ -479,7 +484,6 @@
         elements.comparisonPanel.hidden = !hasPrimary || !state.comparing;
         elements.citiesSection.hidden = !hasPrimary;
         if (!hasPrimary) {
-            elements.originIntro.textContent = 'Udforsk og sammenlign arbejdsmarkedsoplande fra alle kommunens byer og lokalsamfund.';
             elements.legendPrimary.textContent = 'Vælg udgangspunkt A';
             elements.reached.textContent = 'Vælg by';
             updateMarkers();
@@ -494,9 +498,6 @@
         elements.mapOutput.value = `${state.minutes} minutter`;
         elements.mapOutput.textContent = `${state.minutes} minutter`;
         elements.singleOriginName.textContent = `A · ${primary.origin.name}`;
-        elements.originIntro.textContent = state.comparing && hasSecondary
-            ? `Sammenlign arbejdsmarkedsoplandet fra ${primary.origin.name} og ${secondary.origin.name}.`
-            : `Udforsk arbejdsmarkedsoplandet fra ${primary.origin.name}.`;
         elements.legendPrimary.textContent = primary.origin.name;
         elements.legendSecondary.textContent = hasSecondary ? secondary.origin.name : 'Vælg B';
         elements.citiesContext.textContent = state.comparing && hasSecondary
@@ -597,18 +598,20 @@
                 const roundedUrbanJobs = cityJobs.reduce((sum, settlement) => sum + settlement.jobs, 0);
                 const roundedRuralJobs = Math.min(Math.max(0, totalJobs - roundedUrbanJobs), Math.max(0, Math.round(ruralJobs || 0)));
                 const inZoneJobs = roundedUrbanJobs + roundedRuralJobs;
-                municipalityBreakdown.push({
-                    code,
-                    name: municipality.name,
-                    cityJobs: cityJobs.filter((settlement) => settlement.jobs > 0),
-                    urbanJobs: roundedUrbanJobs,
-                    ruralJobs: roundedRuralJobs,
-                    urbanWorkplaces: urbanWorkplaces === null ? null : Math.round(urbanWorkplaces),
-                    ruralWorkplaces: ruralWorkplaces === null ? null : Math.round(ruralWorkplaces),
-                    jobs: inZoneJobs,
-                    outsideJobs: Math.max(0, totalJobs - inZoneJobs),
-                    totalJobs,
-                });
+                if (inZoneJobs > 0) {
+                    municipalityBreakdown.push({
+                        code,
+                        name: municipality.name,
+                        cityJobs: cityJobs.filter((settlement) => settlement.jobs > 0),
+                        urbanJobs: roundedUrbanJobs,
+                        ruralJobs: roundedRuralJobs,
+                        urbanWorkplaces: urbanWorkplaces === null ? null : Math.round(urbanWorkplaces),
+                        ruralWorkplaces: ruralWorkplaces === null ? null : Math.round(ruralWorkplaces),
+                        jobs: inZoneJobs,
+                        outsideJobs: Math.max(0, totalJobs - inZoneJobs),
+                        totalJobs,
+                    });
+                }
             }
             if (Number.isFinite(municipality.jobs)) {
                 hasJobs = true;
@@ -1134,6 +1137,7 @@
         else url.searchParams.delete('origin');
         if (state.comparing && state.scenarios.secondary.originId) url.searchParams.set('compare', state.scenarios.secondary.originId);
         else url.searchParams.delete('compare');
+        url.searchParams.set('minutes', String(state.minutes));
         window.history.replaceState({}, '', url);
     }
 

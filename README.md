@@ -1,4 +1,4 @@
-# Arbejdsmarkedskort for hele Lemvig Kommune
+# Joboplandskort for Lemvig Kommune
 Et arbejdsmarkedsværktøj for hele Lemvig Kommune, der viser og sammenligner realistiske køretidszoner og modelberegnede joboplande.
 
 Appen er bygget til et almindeligt PHP-webhotel og kræver ingen database, Composer, Node.js eller buildkommando. Alle URL'er er relative, så den kan køre fra eksempelvis `https://bibkort.landogbyforeningen.dk/`.
@@ -7,7 +7,7 @@ Appen er bygget til et almindeligt PHP-webhotel og kræver ingen database, Compo
 
 - 15–90 minutters køretidsområde i trin på 5 minutter
 - 26 byer og lokalsamfund i Lemvig Kommune samt fem punkter ved kommunegrænsen kan vælges som udgangspunkt
-- delbare sammenligninger via URL-parameteren `origin`
+- delbare valg via URL-parametrene `origin`, `compare` og `minutes`
 - to udgangspunkter kan sammenlignes med hver sin zone, nøgletal og branchegraf
 - TravelTime-isochroner baseret på vejnettet, ikke simple cirkler; Valhalla bruges som lokal fallback uden nøgler
 - byernes start- og slutpunkter er fastlagt ensartet og dokumenteret, så ingen by favoriseres i modellen

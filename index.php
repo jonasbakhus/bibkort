@@ -37,9 +37,9 @@ $isGoogle = $config['variant'] === 'google';
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <meta name="description" content="Sammenlign arbejdsmarkedsoplande for hele Lemvig Kommunes byer og lokalsamfund.">
+    <meta name="description" content="Sammenlign job og arbejdsmarkedsoplande inden for valgt køretid.">
     <?php if ($isStaging): ?><meta name="robots" content="noindex, nofollow, noarchive"><?php endif; ?>
-    <title>Arbejdsmarkedskort for hele Lemvig Kommune · Land og By</title>
+    <title>Joboplandskort for Lemvig Kommune · Land og By</title>
     <link rel="preconnect" href="https://unpkg.com">
     <link rel="preconnect" href="https://tile.openstreetmap.org">
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="anonymous">
@@ -85,8 +85,8 @@ $isGoogle = $config['variant'] === 'google';
                     <span><strong>Land og By</strong><small>Sammen om udvikling</small></span>
                 </a>
                 <p class="eyebrow"><?= $isGoogle ? 'Google-test · ' : '' ?>For hele Lemvig Kommune</p>
-                <h1>Arbejdsmarkedskort</h1>
-                <p class="intro" id="origin-intro">Udforsk og sammenlign arbejdsmarkedsoplande fra alle kommunens byer og lokalsamfund.</p>
+                <h1>Joboplandskort for Lemvig Kommune</h1>
+                <p class="intro">Sammenlign job og arbejdsmarkedsoplande inden for valgt køretid.</p>
             </header>
 
             <section class="origin-control" aria-labelledby="origin-title">
