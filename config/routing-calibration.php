@@ -42,5 +42,8 @@ return [
         'vandborg' => ['intercept_seconds' => -295, 'slope' => 0.979602],
         'vrist' => ['intercept_seconds' => -206, 'slope' => 0.979941],
         'vilhelmsborgvej' => ['intercept_seconds' => -242, 'slope' => 1.015885],
+        // De tre kommunegrænsepunkter ligger tæt og bruger samme lokale kurve indtil næste brede genkalibrering.
+        'donskaervej' => ['intercept_seconds' => -242, 'slope' => 1.015885],
+        'damhusvej' => ['intercept_seconds' => -242, 'slope' => 1.015885],
     ],
 ];

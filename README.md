@@ -6,7 +6,7 @@ Appen er bygget til et almindeligt PHP-webhotel og kræver ingen database, Compo
 ## Funktioner
 
 - 15–90 minutters køretidsområde i trin på 5 minutter
-- 26 byer og lokalsamfund i Lemvig Kommune samt kommunegrænsen ved Vilhelmsborgvej kan vælges som udgangspunkt
+- 26 byer og lokalsamfund i Lemvig Kommune samt tre punkter ved kommunegrænsen kan vælges som udgangspunkt
 - delbare sammenligninger via URL-parameteren `origin`
 - to udgangspunkter kan sammenlignes med hver sin zone, nøgletal og branchegraf
 - TravelTime-isochroner baseret på vejnettet, ikke simple cirkler; Valhalla bruges som lokal fallback uden nøgler
@@ -50,7 +50,7 @@ cache/                         Genererede cachefiler (ignoreres af Git)
 
 TravelTime-oplysninger læses fra miljøvariablerne `BIBKORT_TRAVELTIME_APP_ID` og `BIBKORT_TRAVELTIME_API_KEY` eller fra den Git-ignorerede fil `config/secrets.php`. Kopiér `config/secrets.example.php` som udgangspunkt. Hvis oplysningerne ikke findes, bruger appen Valhalla. Provider kan desuden vælges eksplicit med `BIBKORT_ROUTING_PROVIDER`.
 
-Google Routes bruges kun som kontrolgrundlag ved en bevidst genkalibrering. Scriptet `scripts/calibrate-routing.php` sammenholder alle 27 udgangspunkter med de 23 kontrolbyer i én 621-ruters matrix og tilpasser én fælles lineær tidskurve pr. udgangspunkt. API-nøglen bliver på serveren; Google kaldes ikke ved almindelige besøg. Kør `php scripts/calibrate-routing.php > cache/google-routes-calibration.json`, gennemgå valideringen, og versionsstyr derefter de godkendte koefficienter i `config/routing-calibration.php`.
+Google Routes bruges kun som kontrolgrundlag ved en bevidst genkalibrering. Den versionerede kontrolmatrix omfatter 27 udgangspunkter og 23 kontrolbyer, i alt 621 ruter, med én lineær tidskurve pr. udgangspunkt. De tre nærliggende kommunegrænsepunkter bruger foreløbig samme lokale kurve som Vilhelmsborgvej indtil næste brede genkalibrering. API-nøglen bliver på serveren; Google kaldes ikke ved almindelige besøg. Kør `php scripts/calibrate-routing.php > cache/google-routes-calibration.json`, gennemgå valideringen, og versionsstyr derefter de godkendte koefficienter i `config/routing-calibration.php`.
 
 ## Lokal udvikling
 

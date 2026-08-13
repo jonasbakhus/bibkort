@@ -3,6 +3,10 @@
 declare(strict_types=1);
 
 $config = require __DIR__ . '/config/app.php';
+$originOptionLabel = static function (array $origin): string {
+    $description = trim((string) ($origin['description'] ?? ''));
+    return (string) $origin['name'] . ($description === '' ? '' : ' · ' . $description);
+};
 $clientConfig = [
     'name' => $config['name'],
     'variant' => $config['variant'],
@@ -87,7 +91,7 @@ $isGoogle = $config['variant'] === 'google';
                         <select id="origin-primary" required>
                             <option value="" selected>Vælg en by…</option>
                             <?php foreach ($config['origins'] as $id => $origin): ?>
-                                <option value="<?= htmlspecialchars($id, ENT_QUOTES, 'UTF-8') ?>"><?= htmlspecialchars($origin['name'] . ' · ' . $origin['description'], ENT_QUOTES, 'UTF-8') ?></option>
+                                <option value="<?= htmlspecialchars($id, ENT_QUOTES, 'UTF-8') ?>"><?= htmlspecialchars($originOptionLabel($origin), ENT_QUOTES, 'UTF-8') ?></option>
                             <?php endforeach; ?>
                         </select>
                     </label>
@@ -99,7 +103,7 @@ $isGoogle = $config['variant'] === 'google';
                         <select id="origin-secondary">
                             <option value="" selected>Vælg by B…</option>
                             <?php foreach ($config['origins'] as $id => $origin): ?>
-                                <option value="<?= htmlspecialchars($id, ENT_QUOTES, 'UTF-8') ?>"><?= htmlspecialchars($origin['name'] . ' · ' . $origin['description'], ENT_QUOTES, 'UTF-8') ?></option>
+                                <option value="<?= htmlspecialchars($id, ENT_QUOTES, 'UTF-8') ?>"><?= htmlspecialchars($originOptionLabel($origin), ENT_QUOTES, 'UTF-8') ?></option>
                             <?php endforeach; ?>
                         </select>
                     </label>

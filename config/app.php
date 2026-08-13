@@ -156,10 +156,24 @@ return [
         ],
         'vilhelmsborgvej' => [
             'id' => 'vilhelmsborgvej',
-            'name' => 'Vilhelmsborgvej',
-            'description' => 'Kommunegrænsen',
-            'lat' => 56.4292803589424,
-            'lon' => 8.409031699370793,
+            'name' => 'Kommunegrænse - Vilhelmsborgvej',
+            'description' => '',
+            'lat' => 56.42927620506989,
+            'lon' => 8.409006874293725,
+        ],
+        'donskaervej' => [
+            'id' => 'donskaervej',
+            'name' => 'Kommunegrænse - Donskærvej',
+            'description' => '',
+            'lat' => 56.39165837986222,
+            'lon' => 8.432911422327615,
+        ],
+        'damhusvej' => [
+            'id' => 'damhusvej',
+            'name' => 'Kommunegrænse - Damhusvej',
+            'description' => '',
+            'lat' => 56.368129964056465,
+            'lon' => 8.333982962546616,
         ],
     ],
     'slider' => [
