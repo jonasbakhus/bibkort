@@ -345,6 +345,7 @@ body.is-comparing #origin-primary { border-color: #62b9ae; box-shadow: 0 0 0 2px
 .origin-dot { background: #e3553f; box-shadow: 0 0 0 2px rgb(227 85 63 / 20%); }
 .secondary-dot { background: var(--compare); box-shadow: 0 0 0 2px rgb(109 91 208 / 20%); }
 .near-dot { background: var(--near); }
+.boundary-point-dot { width: 7px; height: 7px; background: var(--brand); box-shadow: 0 0 0 2px rgb(242 103 58 / 18%); }
 .legend-line { width: 18px; height: 0; border-top: 3px dashed var(--brand); }
 .context-municipality-line { border-top-width: 2px; border-top-color: #526d7a; }
 

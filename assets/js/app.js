@@ -24,6 +24,8 @@
         municipalityBoundaries: new Map(),
         markers: new Map(),
         touchMarkers: new Map(),
+        boundaryMarkers: new Map(),
+        boundaryTouchMarkers: new Map(),
         municipalityLayer: null,
         contextMunicipalityLayer: null,
         supportingDataStarted: false,
@@ -113,6 +115,23 @@
             }).addTo(map).bindPopup(cityPopup(city));
             state.touchMarkers.set(city.id, touchMarker);
         }
+    });
+    Object.values(config.origins).filter((origin) => origin.type === 'boundary').forEach((origin) => {
+        const marker = L.circleMarker([origin.lat, origin.lon], {
+            radius: 4.5,
+            color: '#fff',
+            weight: 2,
+            fillColor: '#f2673a',
+            fillOpacity: 1,
+        }).addTo(map).bindPopup(boundaryPointPopup(origin));
+        const touchMarker = L.marker([origin.lat, origin.lon], {
+            icon: L.divIcon({ className: 'city-touch-target boundary-touch-target', iconSize: [34, 34], iconAnchor: [17, 17] }),
+            keyboard: true,
+            title: origin.name,
+            alt: origin.name,
+        }).addTo(map).bindPopup(boundaryPointPopup(origin));
+        state.boundaryMarkers.set(origin.id, marker);
+        state.boundaryTouchMarkers.set(origin.id, touchMarker);
     });
     map.on('popupopen', ({ popup }) => {
         popup.getElement()?.querySelectorAll('[data-select-origin]').forEach((button) => {
@@ -845,6 +864,11 @@
             marker.setPopupContent(cityPopup(city));
             state.touchMarkers.get(city.id)?.setPopupContent(cityPopup(city));
         });
+        state.boundaryMarkers.forEach((marker, originId) => {
+            const origin = config.origins[originId];
+            marker.setPopupContent(boundaryPointPopup(origin));
+            state.boundaryTouchMarkers.get(originId)?.setPopupContent(boundaryPointPopup(origin));
+        });
     }
 
     function combinedCityStatus(cityId) {
@@ -898,13 +922,19 @@
         const cityJobsLine = cityJobs === null
             ? ''
             : `<span class="city-model-jobs">Byandel i 90/10-modellen: <strong>${numberFormat.format(cityJobs)} job</strong></span>`;
-        const selection = canSelect
-            ? `<div class="city-popup-actions">
-                <button type="button" data-select-origin="primary" data-origin-id="${escapeHtml(city.id)}">${state.comparing ? 'Vælg som A' : 'Vælg udgangspunkt'}</button>
-                ${state.comparing ? `<button type="button" data-select-origin="secondary" data-origin-id="${escapeHtml(city.id)}">Vælg som B</button>` : ''}
-              </div>`
-            : '';
+        const selection = canSelect ? originSelectionActions(city.id) : '';
         return `<div class="city-popup"><strong>${escapeHtml(city.name)}</strong>${routes}<span>${escapeHtml(city.municipality)} Kommune</span>${cityJobsLine}${selection}</div>`;
+    }
+
+    function boundaryPointPopup(origin) {
+        return `<div class="city-popup boundary-point-popup"><strong>${escapeHtml(origin.name)}</strong><span>Punkt ved Lemvig Kommunes grænse</span>${originSelectionActions(origin.id)}</div>`;
+    }
+
+    function originSelectionActions(originId) {
+        return `<div class="city-popup-actions">
+            <button type="button" data-select-origin="primary" data-origin-id="${escapeHtml(originId)}">${state.comparing ? 'Vælg som A' : 'Vælg udgangspunkt'}</button>
+            ${state.comparing ? `<button type="button" data-select-origin="secondary" data-origin-id="${escapeHtml(originId)}">Vælg som B</button>` : ''}
+        </div>`;
     }
 
     function estimatedSettlementJobs(city) {
