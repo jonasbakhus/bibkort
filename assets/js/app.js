@@ -23,6 +23,7 @@
         settlementsByMunicipality: new Map(),
         municipalityBoundaries: new Map(),
         markers: new Map(),
+        municipalityLayer: null,
         supportingDataStarted: false,
         mobileDisclosureApplied: false,
         scenarios: {
@@ -76,8 +77,10 @@
     L.control.zoom({ position: 'topright' }).addTo(map);
     map.createPane('isochrone-primary');
     map.createPane('isochrone-secondary');
+    map.createPane('municipality-boundary');
     map.getPane('isochrone-primary').style.zIndex = 350;
     map.getPane('isochrone-secondary').style.zIndex = 351;
+    map.getPane('municipality-boundary').style.zIndex = 360;
 
     L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
         maxZoom: 19,
@@ -86,6 +89,9 @@
     if (config.variant === 'google') {
         map.attributionControl.addAttribution('<span class="google-maps-attribution" translate="no">Google Maps</span>');
     }
+    map.on('zoomend', updateMapDetailClass);
+    updateMapDetailClass();
+    loadMunicipalityBoundary();
 
     config.cities.forEach((city) => {
         const marker = L.circleMarker([city.lat, city.lon], markerStyle('muted', 0)).addTo(map);
@@ -312,6 +318,23 @@
         render();
     }
 
+    async function loadMunicipalityBoundary() {
+        try {
+            const response = await fetchJson(config.endpoints.boundary);
+            if (state.municipalityLayer) map.removeLayer(state.municipalityLayer);
+            state.municipalityLayer = L.geoJSON(response.geojson, {
+                pane: 'municipality-boundary',
+                interactive: false,
+                style: { color: '#f2673a', weight: 3, opacity: 0.95, fill: false, dashArray: '9 6', lineCap: 'round' },
+            }).addTo(map);
+            if (!state.scenarios.primary.origin) {
+                map.fitBounds(state.municipalityLayer.getBounds().pad(0.1), { padding: [24, 24], maxZoom: 10 });
+            }
+        } catch (error) {
+            // Kortet og beregningerne kan fortsat bruges, hvis det dekorative grænselag fejler.
+        }
+    }
+
     async function loadGeography() {
         try {
             const response = await fetchJson(config.endpoints.geography);
@@ -408,7 +431,7 @@
                 ? `A: ${primaryResult.reachedCities.length} · B: ${secondaryResult.reachedCities.length}`
                 : 'Beregner begge zoner…'
             : primaryResult.ready
-                ? `${primaryResult.reachedCities.length} af ${primary.cities.length} byer nås`
+                ? `${primaryResult.reachedCities.length} byer nås`
                 : 'Beregner zone og tal…';
 
         renderStatus();
@@ -809,6 +832,10 @@
         elements.slider.style.setProperty('--progress', `${progress}%`);
     }
 
+    function updateMapDetailClass() {
+        map.getContainer().classList.toggle('map-zoom-detail', map.getZoom() >= 10);
+    }
+
     function originIcon(name, key) {
         return L.divIcon({
             className: `origin-marker-wrap${key === 'secondary' ? ' is-secondary' : ''}`,
@@ -823,10 +850,17 @@
     }
 
     function fitMapToOrigins() {
-        const points = [...config.cities.map((city) => [city.lat, city.lon])];
-        if (state.scenarios.primary.origin) points.push([state.scenarios.primary.origin.lat, state.scenarios.primary.origin.lon]);
-        if (state.comparing && state.scenarios.secondary.origin) points.push([state.scenarios.secondary.origin.lat, state.scenarios.secondary.origin.lon]);
-        map.fitBounds(L.latLngBounds(points).pad(0.08), { padding: [30, 30] });
+        const primary = state.scenarios.primary.origin;
+        const secondary = state.comparing ? state.scenarios.secondary.origin : null;
+        if (!primary) {
+            if (state.municipalityLayer) map.fitBounds(state.municipalityLayer.getBounds().pad(0.1), { padding: [24, 24], maxZoom: 10 });
+            return;
+        }
+        if (!secondary) {
+            map.setView([primary.lat, primary.lon], 8, { animate: false });
+            return;
+        }
+        map.fitBounds(L.latLngBounds([[primary.lat, primary.lon], [secondary.lat, secondary.lon]]).pad(0.65), { padding: [30, 30], maxZoom: 9 });
     }
 
     function formatMinutes(seconds) {

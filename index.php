@@ -16,6 +16,7 @@ $clientConfig = [
         'routing' => 'api/routing.php',
         'statbank' => 'api/statbank.php',
         'geography' => 'api/geography.php',
+        'boundary' => 'api/boundary.php',
     ],
 ];
 $assetVersion = max(
@@ -53,6 +54,7 @@ $isGoogle = $config['variant'] === 'google';
                 <span id="legend-secondary-wrap" hidden><i class="legend-dot secondary-dot"></i><span id="legend-secondary">Vælg B</span></span>
                 <span><i class="legend-dot reached-dot"></i>Nået by</span>
                 <span><i class="legend-dot near-dot"></i>Nær grænsen</span>
+                <span><i class="legend-line municipality-line"></i>Lemvig Kommune</span>
             </div>
             <div id="map-loading" class="map-loading is-prompt" role="status">Vælg en by for at starte</div>
         </section>
