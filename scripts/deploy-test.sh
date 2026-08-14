@@ -54,7 +54,7 @@ php "$target/scripts/prewarm-routing.php" > "$routing_prewarm"
 grep -Fq '"provider":"TravelTime"' "$routing_prewarm"
 
 routing_response="$stage/routing-http.json"
-curl -fsS --max-time 30 'https://testbibkort.landogbyforeningen.dk/api/routing.php?action=matrix&origin=lemvig' -o "$routing_response"
+curl -fsS --max-time 60 'https://testbibkort.landogbyforeningen.dk/api/routing.php?action=matrix&scope=settlements&origin=lemvig' -o "$routing_response"
 grep -Fq '"provider":"TravelTime"' "$routing_response"
 geography_response="$stage/geography-http.json"
 curl -fsS --max-time 30 'https://testbibkort.landogbyforeningen.dk/api/geography.php' -o "$geography_response"

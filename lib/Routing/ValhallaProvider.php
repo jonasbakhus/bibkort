@@ -34,6 +34,18 @@ final class ValhallaProvider
 
     public function matrix(array $origin, array $cities): array
     {
+        $routes = [];
+        // Hold GET-forespørgslerne under praktiske URL- og tjenestegrænser, når
+        // den udvidede BY3-referencepulje bruges i lokal fallback.
+        foreach (array_chunk($cities, 50) as $cityBatch) {
+            $routes = array_merge($routes, $this->matrixBatch($origin, $cityBatch));
+        }
+
+        return $routes;
+    }
+
+    private function matrixBatch(array $origin, array $cities): array
+    {
         $request = [
             'sources' => [['lat' => $origin['lat'], 'lon' => $origin['lon']]],
             'targets' => array_map(

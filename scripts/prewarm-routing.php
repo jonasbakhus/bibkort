@@ -6,6 +6,7 @@ declare(strict_types=1);
 $config = require __DIR__ . '/../config/app.php';
 $_SERVER['REQUEST_METHOD'] = 'GET';
 $originId = is_string($argv[1] ?? null) ? $argv[1] : array_key_first($config['origins']);
+$scope = is_string($argv[2] ?? null) ? $argv[2] : 'settlements';
 if (!isset($config['origins'][$originId])) {
     fwrite(STDERR, "Ukendt udgangspunkt: {$originId}\n");
     exit(1);
@@ -13,6 +14,7 @@ if (!isset($config['origins'][$originId])) {
 $_GET = [
     'action' => 'matrix',
     'origin' => $originId,
+    'scope' => $scope,
 ];
 
 require __DIR__ . '/../api/routing.php';

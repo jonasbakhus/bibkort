@@ -9,9 +9,13 @@ app_require_get();
 $config = require __DIR__ . '/../config/app.php';
 $table = $config['statbank']['table'];
 $ttl = (int) $config['statbank']['cache_ttl'];
-$municipalities = [];
-foreach ($config['cities'] as $city) {
-    $municipalities[$city['municipalityCode']] = $city['municipality'];
+$municipalities = is_array($config['analysis_municipalities'] ?? null)
+    ? $config['analysis_municipalities']
+    : [];
+if ($municipalities === []) {
+    foreach ($config['cities'] as $city) {
+        $municipalities[$city['municipalityCode']] = $city['municipality'];
+    }
 }
 $cacheKey = 'statbank-' . strtolower($table) . '-' . sha1(json_encode(array_keys($municipalities)));
 

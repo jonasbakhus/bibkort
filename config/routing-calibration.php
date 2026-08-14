@@ -16,7 +16,7 @@ return [
     'default' => ['intercept_seconds' => -229, 'slope' => 0.991830],
     'origins' => [
         'lemvig' => ['intercept_seconds' => -225, 'slope' => 1.029540],
-        // Hele kurven er forskudt med Bækmarksbro–Bording = 60 min. som lokalt kontrolanker.
+        // Hele kurven er forskudt med et lokalt kontrolanker; ingen destinationssærregel.
         'baekmarksbro' => ['intercept_seconds' => -91, 'slope' => 1.029568],
         'thyboroen' => ['intercept_seconds' => -422, 'slope' => 0.964114],
         'harbooere' => ['intercept_seconds' => -326, 'slope' => 0.991811],

@@ -6,6 +6,7 @@
 
     const config = JSON.parse(configElement.textContent);
     const CITY_LABEL_MIN_ZOOM = 11;
+    const NEAR_MARGIN_MINUTES = Number(config.nearMarginMinutes || 5);
     const RURAL_TAIL_MIN_COVERAGE = 0.95;
     const RURAL_TAIL_MAX_JOBS = 100;
     const params = new URLSearchParams(window.location.search);
@@ -29,6 +30,7 @@
         geographyError: null,
         settlementsByMunicipality: new Map(),
         municipalityBoundaries: new Map(),
+        cityCatalog: new Map(config.cities.map((city) => [city.id, city])),
         markers: new Map(),
         touchMarkers: new Map(),
         boundaryMarkers: new Map(),
@@ -111,7 +113,10 @@
     }
     loadMunicipalityBoundary();
 
-    config.cities.forEach((city) => {
+    config.cities.forEach(addCityMarker);
+    function addCityMarker(city) {
+        if (!city?.id || state.markers.has(city.id)) return;
+        state.cityCatalog.set(city.id, city);
         const marker = L.circleMarker([city.lat, city.lon], markerStyle('muted', 0)).addTo(map);
         marker.bindPopup(cityPopup(city));
         marker.bindTooltip(city.name, {
@@ -131,7 +136,14 @@
             }).addTo(map).bindPopup(cityPopup(city));
             state.touchMarkers.set(city.id, touchMarker);
         }
-    });
+    }
+
+    function syncRoutingCities(cities) {
+        cities.forEach((city) => {
+            state.cityCatalog.set(city.id, city);
+            addCityMarker(city);
+        });
+    }
     Object.values(config.origins).filter((origin) => origin.type === 'boundary').forEach((origin) => {
         const marker = L.circleMarker([origin.lat, origin.lon], {
             radius: 4.5,
@@ -248,6 +260,7 @@
             origin: validOrigin(originId) ? config.origins[originId] : null,
             cities: config.cities.map(emptyRoute),
             routingReady: false,
+            routingSettlementScope: false,
             routeError: null,
             geojson: null,
             layer: null,
@@ -326,6 +339,7 @@
         scenario.origin = validOrigin(originId) ? config.origins[originId] : null;
         scenario.cities = config.cities.map(emptyRoute);
         scenario.routingReady = false;
+        scenario.routingSettlementScope = false;
         scenario.routeError = null;
         scenario.geojson = null;
         scenario.zoneMinutes = null;
@@ -365,9 +379,11 @@
         if (!scenario.origin || scenario.routingReady) return;
         const requestId = ++scenario.routingRequest;
         try {
-            const response = await fetchJson(`${config.endpoints.routing}?action=matrix&origin=${encodeURIComponent(scenario.originId)}`);
+            const response = await fetchJson(`${config.endpoints.routing}?action=matrix&scope=settlements&origin=${encodeURIComponent(scenario.originId)}`);
             if (requestId !== scenario.routingRequest) return;
             scenario.cities = response.cities;
+            scenario.routingSettlementScope = response.scope === 'settlements';
+            syncRoutingCities(response.cities);
             scenario.routingReady = true;
             scenario.routeError = response.warning || null;
         } catch (error) {
@@ -602,6 +618,7 @@
                 const cityJobs = coveredSettlements
                     .map((settlement) => ({
                         name: settlement.name,
+                        municipalityCode: settlement.municipalityCode,
                         rawJobs: totalUrbanWeight > 0
                             ? municipality.jobs * state.geography.weights.urban * settlementUrbanWeight(settlement) / totalUrbanWeight
                             : 0,
@@ -753,13 +770,35 @@
     function settlementUrbanWeight(settlement) {
         const population = Math.max(0, Number(settlement?.population) || 0);
         const exponent = Number(state.geography?.weights?.urbanPopulationExponent) || 1;
-        return Math.pow(population, exponent);
+        const evidence = cityEmploymentEvidence(settlement);
+        const factor = Number(evidence?.factor) > 0 ? Number(evidence.factor) : 1;
+        return Math.pow(population, exponent) * factor;
+    }
+
+    function cityEmploymentEvidence(city) {
+        const evidence = state.geography?.employmentEvidence || {};
+        const target = `${city?.municipalityCode}|${normalizedPlaceName(city?.name)}`;
+        if (evidence[target]) return evidence[target];
+        const match = Object.entries(evidence).find(([key]) => normalizedPlaceName(key) === target);
+        return match?.[1] || null;
+    }
+
+    function cityModelBasis(city) {
+        const evidence = cityEmploymentEvidence(city);
+        if (evidence) {
+            return `${evidence.source || 'Dokumenteret bykorrektion'} · ${evidence.year || 'år ukendt'} · faktor ${Number(evidence.factor).toLocaleString('da-DK')}`;
+        }
+        const exponent = Number(state.geography?.weights?.urbanPopulationExponent || 1).toLocaleString('da-DK', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        return `ERHV2 ${state.statsYear || '—'} / BY3 ${state.geography?.year || '—'} · befolkning^${exponent}`;
     }
 
     function settlementReached(scenario, settlement) {
         const routeCity = scenario.cities.find((city) => String(city.municipalityCode) === String(settlement.municipalityCode)
             && normalizedPlaceName(city.name) === normalizedPlaceName(settlement.name));
         if (routeCity) return cityReached(scenario, routeCity);
+        // Settlement-scope matricen har allerede prøvet alle BY3-steder i analyseområdet.
+        // Mangler et sted i det filtrerede svar, ligger det uden for maksimum + nærmargin.
+        if (scenario.routingSettlementScope) return false;
         return Boolean(scenario.geojson) && pointInZone(settlement.lon, settlement.lat, scenario.geojson);
     }
 
@@ -975,7 +1014,7 @@
             const ruralWidth = (municipality.ruralJobs / total) * 100;
             const outsideWidth = Math.max(0, 100 - urbanWidth - ruralWidth);
             const cities = municipality.cityJobs.length
-                ? municipality.cityJobs.map((city) => `<span class="municipality-city"><i>${escapeHtml(city.name)}</i><em>${formatKnown(city.jobs)} job</em></span>`).join('')
+                ? municipality.cityJobs.map((city) => `<span class="municipality-city"><i>${escapeHtml(city.name)}<small>${escapeHtml(cityModelBasis(city))}</small></i><em>${formatKnown(city.jobs)} job</em></span>`).join('')
                 : '<span class="municipality-city is-empty"><i>Ingen registrerede bymidter i zonen</i><em>0 job</em></span>';
             const adjustment = municipality.ruralTailAdjusted
                 ? `<span class="municipality-adjustment" title="Restreglen anvendes kun, når alle registrerede bypunkter i kommunen nås, mindst 95 % af kommunearealet overlapper zonen, og den beregnede rest af 10 %-puljen er under 100 job."><i>Lille restpulje medregnet · alle bypunkter nås</i><em>+${formatKnown(municipality.adjustedRuralJobs)} job</em></span>`
@@ -1042,29 +1081,38 @@
             return;
         }
         elements.cityList.setAttribute('aria-busy', 'false');
-        const cities = [...primary.cities].sort((a, b) => {
-            const aTime = state.comparing ? Math.min(a.travelSeconds ?? Infinity, cityFor(secondary, a.id)?.travelSeconds ?? Infinity) : a.travelSeconds ?? Infinity;
-            const bTime = state.comparing ? Math.min(b.travelSeconds ?? Infinity, cityFor(secondary, b.id)?.travelSeconds ?? Infinity) : b.travelSeconds ?? Infinity;
+        const nearLimit = state.minutes + NEAR_MARGIN_MINUTES;
+        const cityCandidates = new Map(primary.cities.map((city) => [city.id, city]));
+        if (state.comparing) secondary.cities.forEach((city) => cityCandidates.set(city.id, cityCandidates.get(city.id) || city));
+        const cities = [...cityCandidates.values()].filter((city) => {
+            const primaryMinutes = cityTravelMinutes(cityFor(primary, city.id));
+            const secondaryMinutes = cityTravelMinutes(cityFor(secondary, city.id));
+            return [primaryMinutes, secondaryMinutes].some((minutes) => minutes !== null && minutes <= nearLimit);
+        }).sort((a, b) => {
+            const aTime = Math.min(cityFor(primary, a.id)?.travelSeconds ?? Infinity, cityFor(secondary, a.id)?.travelSeconds ?? Infinity);
+            const bTime = Math.min(cityFor(primary, b.id)?.travelSeconds ?? Infinity, cityFor(secondary, b.id)?.travelSeconds ?? Infinity);
             return aTime - bTime;
         });
-        elements.cityList.innerHTML = cities.map((city) => {
+        const methodNote = `<p class="city-list-method">Alle viste byer har en beregnet tid på højst ${nearLimit} minutter. Jobmodellen vises med kildeår og formel ved hver by.</p>`;
+        elements.cityList.innerHTML = methodNote + cities.map((city) => {
             const status = combinedCityStatus(city.id);
+            const primaryCity = cityFor(primary, city.id);
             const secondaryCity = cityFor(secondary, city.id);
             const routes = state.comparing
                 ? `<span class="city-routes">
-                    <span class="city-route"><strong>${formatMinutes(city.travelSeconds)}</strong><small>A · ${formatDistance(city.distanceKm)}</small></span>
+                    <span class="city-route"><strong>${formatMinutes(primaryCity?.travelSeconds)}</strong><small>A · ${formatDistance(primaryCity?.distanceKm)}</small></span>
                     <span class="city-route"><strong>${formatMinutes(secondaryCity?.travelSeconds)}</strong><small>B · ${formatDistance(secondaryCity?.distanceKm)}</small></span>
                   </span>`
-                : `<span class="city-route"><strong>${formatMinutes(city.travelSeconds)}</strong><small>${formatDistance(city.distanceKm)}</small></span>`;
+                : `<span class="city-route"><strong>${formatMinutes(primaryCity?.travelSeconds)}</strong><small>${formatDistance(primaryCity?.distanceKm)}</small></span>`;
             return `<button class="city-row is-${status}" type="button" data-city-id="${escapeHtml(city.id)}">
                 <span class="city-status-dot"></span>
-                <span class="city-main"><strong>${escapeHtml(city.name)}</strong><small>${escapeHtml(city.municipality)} Kommune</small></span>
+                <span class="city-main"><strong>${escapeHtml(city.name)}</strong><small>${escapeHtml(city.municipality)} Kommune</small><small class="city-model-basis">${escapeHtml(cityModelBasis(city))}</small></span>
                 ${routes}
             </button>`;
         }).join('');
         elements.cityList.querySelectorAll('[data-city-id]').forEach((button) => {
             button.addEventListener('click', () => {
-                const city = config.cities.find((item) => item.id === button.dataset.cityId);
+                const city = state.cityCatalog.get(button.dataset.cityId);
                 const marker = state.markers.get(button.dataset.cityId);
                 if (city && marker) {
                     map.flyTo([city.lat, city.lon], Math.max(map.getZoom(), 10), { duration: 0.5 });
@@ -1075,7 +1123,7 @@
     }
 
     function updateMarkers() {
-        config.cities.forEach((city) => {
+        state.cityCatalog.forEach((city) => {
             const marker = state.markers.get(city.id);
             if (!marker) return;
             const status = combinedCityStatus(city.id);
@@ -1119,7 +1167,7 @@
         if (secondaryReached) return 'secondary';
         const near = [primary, secondary].some((city) => {
             const minutes = cityTravelMinutes(city);
-            return minutes !== null && minutes > state.minutes && minutes - state.minutes <= 5;
+            return minutes !== null && minutes > state.minutes && minutes - state.minutes <= NEAR_MARGIN_MINUTES;
         });
         return near ? 'near' : 'muted';
     }
@@ -1129,7 +1177,7 @@
         if (config.reachability === 'zone') return cityReached(scenario, city) ? 'reached' : 'muted';
         const difference = cityTravelMinutes(city) - state.minutes;
         if (difference <= 0) return 'reached';
-        return difference <= 5 ? 'near' : 'muted';
+        return difference <= NEAR_MARGIN_MINUTES ? 'near' : 'muted';
     }
 
     function cityReached(scenario, city) {
@@ -1166,8 +1214,11 @@
         const cityJobsLine = cityJobs === null
             ? ''
             : `<span class="city-model-jobs">Størrelsesvægtet byandel: <strong>${numberFormat.format(cityJobs)} job</strong></span>`;
+        const basisLine = state.statsReady && state.geographyReady
+            ? `<span class="city-model-basis">Grundlag: ${escapeHtml(cityModelBasis(city))}</span>`
+            : '';
         const selection = canSelect ? originSelectionActions(city.id) : '';
-        return `<div class="city-popup"><strong>${escapeHtml(city.name)}</strong>${routes}<span>${escapeHtml(city.municipality)} Kommune</span>${cityJobsLine}${selection}</div>`;
+        return `<div class="city-popup"><strong>${escapeHtml(city.name)}</strong>${routes}<span>${escapeHtml(city.municipality)} Kommune</span>${cityJobsLine}${basisLine}${selection}</div>`;
     }
 
     function boundaryPointPopup(origin) {

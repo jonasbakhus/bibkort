@@ -216,6 +216,8 @@ return [
         'google_routes_api_key' => (string) $googleRoutesApiKey,
         // Bred, reproducerbar Google Routes-kalibrering. Google-varianten bruger identitet her.
         'travel_time_calibration' => $travelTimeCalibration,
+        // Byer mellem sliderens maksimum og +5 minutter bruges kun til "nær"-visning.
+        'near_margin_minutes' => 5,
         'cache_ttl' => 30 * 24 * 60 * 60,
     ],
     'statbank' => [
@@ -228,9 +230,42 @@ return [
         'rural_weight' => 0.10,
         // Mild størrelsesvægt: større byer antages at have lidt flere job pr. indbygger.
         'urban_population_exponent' => 1.10,
+        // Kildebaserede bykorrektioner kan senere tilføjes som
+        // 'kommunekode|bynavn' => ['factor' => 1.25, 'source' => '...', 'year' => 2024, 'url' => '...'].
+        // Listen er bevidst tom, indtil et ensartet og dokumenterbart datasæt foreligger.
+        'urban_employment_evidence' => [],
         // Ca. 100 meter. Landzoneandelen er kun 10 %, så denne præcision er rigelig og langt hurtigere.
         'boundary_simplify_tolerance' => 0.001,
         'cache_ttl' => 30 * 24 * 60 * 60,
+    ],
+    // Bredt sammenhængende analyseområde omkring Lemvig. Kun byer med en faktisk
+    // rutetid på højst sliderens maksimum + nærmargin sendes videre til kortet.
+    'analysis_municipalities' => [
+        '530' => 'Billund',
+        '561' => 'Esbjerg',
+        '573' => 'Varde',
+        '575' => 'Vejen',
+        '607' => 'Fredericia',
+        '615' => 'Horsens',
+        '621' => 'Kolding',
+        '630' => 'Vejle',
+        '657' => 'Herning',
+        '661' => 'Holstebro',
+        '665' => 'Lemvig',
+        '671' => 'Struer',
+        '710' => 'Favrskov',
+        '730' => 'Randers',
+        '740' => 'Silkeborg',
+        '746' => 'Skanderborg',
+        '751' => 'Aarhus',
+        '756' => 'Ikast-Brande',
+        '760' => 'Ringkøbing-Skjern',
+        '766' => 'Hedensted',
+        '773' => 'Morsø',
+        '779' => 'Skive',
+        '787' => 'Thisted',
+        '791' => 'Viborg',
+        '820' => 'Vesthimmerlands',
     ],
     // Byer og deres kommune er samlet her, så listen kan udvides ét sted.
     'cities' => [

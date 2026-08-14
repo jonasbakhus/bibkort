@@ -2,13 +2,63 @@
 
 declare(strict_types=1);
 
-function app_fetch_analysis_geography(array $config): array
+function app_analysis_municipalities(array $config): array
 {
+    if (is_array($config['analysis_municipalities'] ?? null) && $config['analysis_municipalities'] !== []) {
+        $municipalities = $config['analysis_municipalities'];
+        ksort($municipalities);
+
+        return $municipalities;
+    }
     $municipalities = [];
     foreach ($config['cities'] as $city) {
         $municipalities[$city['municipalityCode']] = $city['municipality'];
     }
     ksort($municipalities);
+
+    return $municipalities;
+}
+
+function app_analysis_geography_cache_key(array $config): string
+{
+    $municipalities = app_analysis_municipalities($config);
+
+    return 'analysis-geography-v4-' . sha1(json_encode([
+        array_keys($municipalities),
+        (float) ($config['geography']['boundary_simplify_tolerance'] ?? 0.001),
+        (float) $config['geography']['urban_weight'],
+        (float) $config['geography']['rural_weight'],
+        (float) $config['geography']['urban_population_exponent'],
+        $config['geography']['urban_employment_evidence'] ?? [],
+    ]));
+}
+
+function app_load_analysis_geography(array $config): array
+{
+    $cacheKey = app_analysis_geography_cache_key($config);
+    $ttl = (int) $config['geography']['cache_ttl'];
+    $cached = app_cache_read($cacheKey, $ttl);
+    if ($cached !== null) {
+        return $cached['data'];
+    }
+
+    try {
+        $payload = app_fetch_analysis_geography($config);
+        app_cache_write($cacheKey, $payload);
+
+        return $payload;
+    } catch (Throwable $exception) {
+        $stale = app_cache_read($cacheKey, $ttl, true);
+        if ($stale !== null) {
+            return $stale['data'];
+        }
+        throw $exception;
+    }
+}
+
+function app_fetch_analysis_geography(array $config): array
+{
+    $municipalities = app_analysis_municipalities($config);
 
     $table = $config['geography']['population_table'];
     $metadata = app_json_decode(
@@ -153,6 +203,7 @@ function app_fetch_analysis_geography(array $config): array
             'rural' => (float) $config['geography']['rural_weight'],
             'urbanPopulationExponent' => (float) $config['geography']['urban_population_exponent'],
         ],
+        'employmentEvidence' => $config['geography']['urban_employment_evidence'] ?? [],
         'source' => 'Danmarks Statistik BY3 og Dataforsyningen',
     ];
 }

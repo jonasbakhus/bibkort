@@ -330,6 +330,7 @@ body.is-map-expanded .map-expanded-time-control .range-labels { margin-top: -2px
 .municipality-adjustment i { color: #78613b; }
 .municipality-adjustment em { color: #78613b; font-style: normal; font-variant-numeric: tabular-nums; text-align: right; }
 .municipality-city i::before { content: ""; display: inline-block; width: 5px; height: 5px; margin: 0 6px 1px 0; border-radius: 50%; background: var(--accent); }
+.municipality-city i small { display: block; margin: 2px 0 0 11px; color: var(--ink-soft); font-size: .55rem; font-weight: 600; line-height: 1.25; }
 .municipality-city.is-empty i { color: var(--ink-soft); font-weight: 600; }
 .municipality-city.is-empty i::before { background: #aeb8b6; }
 .municipality-row em { min-width: 58px; color: var(--ink); font-style: normal; font-variant-numeric: tabular-nums; text-align: right; }
@@ -352,6 +353,7 @@ body.is-map-expanded .map-expanded-time-control .range-labels { margin-top: -2px
 .loading-chart small { margin-top: 2px; }
 
 .city-list { border-top: 1px solid var(--line); }
+.city-list-method { margin: 0; padding: 10px 2px; border-bottom: 1px solid var(--line); color: var(--ink-soft); font-size: .65rem; line-height: 1.4; }
 .loading-list { display: grid; gap: 12px; padding: 15px 2px; color: var(--ink-soft); font-size: 0.76rem; }
 .loading-list p { margin: 0; }
 .city-row {
@@ -377,6 +379,7 @@ body.is-map-expanded .map-expanded-time-control .range-labels { margin-top: -2px
 .city-main, .city-route { min-width: 0; }
 .city-main strong, .city-route strong { display: block; font-size: 0.82rem; line-height: 1.3; }
 .city-main small, .city-route small { display: block; margin-top: 2px; color: var(--ink-soft); font-size: 0.67rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.city-main small.city-model-basis { color: #6b777a; font-size: .59rem; white-space: normal; }
 .city-route { text-align: right; font-variant-numeric: tabular-nums; }
 .city-routes { display: grid; grid-template-columns: repeat(2, minmax(60px, auto)); gap: 12px; }
 .city-routes .city-route { padding-left: 8px; border-left: 2px solid var(--accent-pale); }
@@ -469,6 +472,7 @@ body.is-map-expanded .map-expanded-time-control .range-labels { margin-top: -2px
 .city-popup span { color: var(--ink-soft); font-size: 0.75rem; }
 .city-popup .city-model-jobs { margin-top: 5px; padding-top: 5px; border-top: 1px solid var(--line); }
 .city-popup .city-model-jobs strong { font-size: inherit; }
+.city-popup .city-model-basis { margin-top: 3px; color: #6b777a; font-size: .67rem; line-height: 1.3; }
 .city-popup-actions { display: flex; gap: 6px; margin-top: 7px; }
 .city-popup-actions button { flex: 1; padding: 6px 8px; border: 1px solid var(--accent); border-radius: 7px; background: var(--accent); color: #fff; font-size: .72rem; font-weight: 800; cursor: pointer; }
 .city-popup-actions button:last-child:not(:first-child) { border-color: var(--compare); background: var(--compare); }

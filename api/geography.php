@@ -9,19 +9,7 @@ app_require_get();
 
 $config = require __DIR__ . '/../config/app.php';
 $ttl = (int) $config['geography']['cache_ttl'];
-$codes = [];
-foreach ($config['cities'] as $city) {
-    $codes[$city['municipalityCode']] = true;
-}
-ksort($codes);
-$simplifyTolerance = (float) ($config['geography']['boundary_simplify_tolerance'] ?? 0.001);
-$cacheKey = 'analysis-geography-v3-' . sha1(json_encode([
-    array_keys($codes),
-    $simplifyTolerance,
-    (float) $config['geography']['urban_weight'],
-    (float) $config['geography']['rural_weight'],
-    (float) $config['geography']['urban_population_exponent'],
-]));
+$cacheKey = app_analysis_geography_cache_key($config);
 
 try {
     $cached = app_cache_read($cacheKey, $ttl);

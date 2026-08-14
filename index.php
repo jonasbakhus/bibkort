@@ -11,6 +11,7 @@ $clientConfig = [
     'name' => $config['name'],
     'variant' => $config['variant'],
     'reachability' => $config['routing']['reachability'],
+    'nearMarginMinutes' => $config['routing']['near_margin_minutes'],
     'defaultOrigin' => null,
     'comparisonOrigin' => null,
     'origins' => $config['origins'],
