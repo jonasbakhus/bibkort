@@ -386,6 +386,11 @@
             syncRoutingCities(response.cities);
             scenario.routingReady = true;
             scenario.routeError = response.warning || null;
+            // Jobanalysen bruger rutematricen til at afgøre, hvilke byer der er nået.
+            // Genstart derfor altid analysen, når matricen er klar, uanset hvilken
+            // rækkefølge routing, geografi og isokrone blev hentet i.
+            invalidateAnalysis(scenario);
+            queueAnalysis(scenario);
         } catch (error) {
             if (requestId !== scenario.routingRequest) return;
             scenario.routeError = error.message;
@@ -564,7 +569,7 @@
         return { ready: true, reachedCities, largest, ...scenario.analysis };
     }
 
-    function calculateZoneMetrics(scenario) {
+    async function calculateZoneMetrics(scenario, requestId) {
         const coverage = {};
         const branchTotals = new Map();
         const municipalityBreakdown = [];
@@ -572,7 +577,10 @@
         let hasJobs = false;
         let hasWorkplaces = false;
 
-        Object.entries(state.municipalities).forEach(([code, municipality]) => {
+        const municipalityEntries = Object.entries(state.municipalities);
+        for (let index = 0; index < municipalityEntries.length; index += 1) {
+            if (requestId !== scenario.analysisRequest) return null;
+            const [code, municipality] = municipalityEntries[index];
             const settlements = state.settlementsByMunicipality.get(code) || [];
             const totalUrbanWeight = settlements.reduce((sum, settlement) => sum + settlementUrbanWeight(settlement), 0);
             const coveredSettlements = settlements.filter((settlement) => settlementReached(scenario, settlement));
@@ -674,7 +682,11 @@
                 existing.jobs += branch.jobs * factor;
                 branchTotals.set(branch.code, existing);
             });
-        });
+
+            // Turf-intersektionerne kan være tunge. Giv browseren tid til input,
+            // korttegning og loadingindikator mellem små grupper af kommuner.
+            if ((index + 1) % 2 === 0) await yieldToBrowser();
+        }
 
         return {
             jobs: hasJobs ? municipalityBreakdown.reduce((sum, municipality) => sum + municipality.jobs, 0) : null,
@@ -716,24 +728,30 @@
         activeScenarios().forEach(queueAnalysis);
     }
 
-    function queueAnalysis(scenario) {
-        if (!state.statsReady || !state.geographyReady || !scenario.geojson || scenario.isochroneLoading || scenario.zoneMinutes !== state.minutes || typeof turf === 'undefined') return;
+    async function queueAnalysis(scenario) {
+        if (!state.statsReady || !state.geographyReady || !scenario.routingReady || !scenario.geojson || scenario.isochroneLoading || scenario.zoneMinutes !== state.minutes || typeof turf === 'undefined') return;
         const requestId = ++scenario.analysisRequest;
         scenario.analysisStatus = 'loading';
         scenario.analysis = null;
         scenario.analysisError = null;
         render();
-        window.setTimeout(() => {
+        await yieldToBrowser();
+        if (requestId !== scenario.analysisRequest) return;
+        try {
+            const analysis = await calculateZoneMetrics(scenario, requestId);
+            if (requestId !== scenario.analysisRequest || !analysis) return;
+            scenario.analysis = analysis;
+            scenario.analysisStatus = 'ready';
+        } catch (error) {
             if (requestId !== scenario.analysisRequest) return;
-            try {
-                scenario.analysis = calculateZoneMetrics(scenario);
-                scenario.analysisStatus = 'ready';
-            } catch (error) {
-                scenario.analysisError = 'De geografiske tal kunne ikke beregnes.';
-                scenario.analysisStatus = 'error';
-            }
-            render();
-        }, 0);
+            scenario.analysisError = 'De geografiske tal kunne ikke beregnes.';
+            scenario.analysisStatus = 'error';
+        }
+        render();
+    }
+
+    function yieldToBrowser() {
+        return new Promise((resolve) => window.setTimeout(resolve, 0));
     }
 
     function pointInZone(lon, lat, geojson) {
@@ -1276,6 +1294,12 @@
 
     function updateMapLoading() {
         const active = activeScenarios();
+        const supportingDataLoading = !state.statsReady || !state.geographyReady;
+        const routingLoading = active.some((scenario) => !scenario.routingReady);
+        const calculationLoading = active.some((scenario) => scenario.isochroneLoading || scenario.analysisStatus !== 'ready');
+        const hasError = (!state.statsReady && Boolean(state.statsError))
+            || (!state.geographyReady && Boolean(state.geographyError))
+            || active.some((scenario) => (!scenario.routingReady && scenario.routeError) || scenario.isochroneError || scenario.analysisError);
         if (!state.scenarios.primary.origin) {
             elements.mapLoading.textContent = 'Vælg en by for at starte';
             elements.mapLoading.classList.remove('is-hidden', 'is-error');
@@ -1284,13 +1308,15 @@
             elements.mapLoading.textContent = 'Vælg udgangspunkt B';
             elements.mapLoading.classList.remove('is-hidden', 'is-error');
             elements.mapLoading.classList.add('is-prompt');
-        } else if (active.some((scenario) => scenario.isochroneLoading || scenario.analysisStatus === 'loading')) {
-            elements.mapLoading.textContent = state.comparing ? `Beregner to ${state.minutes}-minutters zoner…` : `Beregner ${state.minutes}-minutters zone…`;
-            elements.mapLoading.classList.remove('is-hidden', 'is-error', 'is-prompt');
-        } else if (active.some((scenario) => scenario.isochroneError)) {
-            elements.mapLoading.textContent = 'En køretidszone kunne ikke hentes';
-            elements.mapLoading.classList.remove('is-hidden');
+        } else if (hasError) {
+            elements.mapLoading.textContent = 'En beregning kunne ikke gennemføres';
+            elements.mapLoading.classList.remove('is-hidden', 'is-prompt');
             elements.mapLoading.classList.add('is-error');
+        } else if (supportingDataLoading || routingLoading || calculationLoading) {
+            elements.mapLoading.textContent = routingLoading
+                ? (state.comparing ? 'Henter køretider for A og B…' : 'Henter køretider…')
+                : (state.comparing ? `Beregner to ${state.minutes}-minutters zoner…` : `Beregner ${state.minutes}-minutters zone…`);
+            elements.mapLoading.classList.remove('is-hidden', 'is-error', 'is-prompt');
         } else {
             elements.mapLoading.classList.add('is-hidden');
             elements.mapLoading.classList.remove('is-error', 'is-prompt');
