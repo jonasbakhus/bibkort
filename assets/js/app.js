@@ -318,10 +318,8 @@
         updateUrl();
         if (state.comparing && state.scenarios.secondary.origin) {
             addOriginMarker(state.scenarios.secondary);
-            if (!state.heatmap.active) {
-                loadRouting(state.scenarios.secondary);
-                loadIsochrone(state.scenarios.secondary);
-            }
+            loadRouting(state.scenarios.secondary);
+            loadIsochrone(state.scenarios.secondary);
         } else {
             removeScenarioMap(state.scenarios.secondary);
         }
@@ -336,8 +334,6 @@
         updateUrl();
         if (state.heatmap.active) {
             updateHeatmapMinute();
-            render();
-            return;
         }
         activeScenarios().forEach((scenario) => {
             scenario.isochroneRequest += 1;
@@ -359,13 +355,13 @@
     });
 
     updateHeatmapControls();
-    if (state.scenarios.primary.origin && !state.heatmap.active) {
+    if (state.scenarios.primary.origin) {
         applyMobileDisclosureDefaults();
         ensureSupportingData();
         loadRouting(state.scenarios.primary);
         loadIsochrone(state.scenarios.primary);
     }
-    if (state.comparing && state.scenarios.secondary.origin && !state.heatmap.active) {
+    if (state.comparing && state.scenarios.secondary.origin) {
         loadRouting(state.scenarios.secondary);
         loadIsochrone(state.scenarios.secondary);
     }
@@ -417,6 +413,10 @@
     }
 
     function selectOrigin(key, originId) {
+        if (originId === '') {
+            clearOrigin(key);
+            return;
+        }
         if (!validOrigin(originId)) return;
         const scenario = state.scenarios[key];
         if (scenario.originId === originId) return;
@@ -439,10 +439,29 @@
         updateUrl();
         fitMapToOrigins();
         render();
-        if (!state.heatmap.active) {
-            loadRouting(scenario);
-            loadIsochrone(scenario);
+        loadRouting(scenario);
+        loadIsochrone(scenario);
+    }
+
+    function clearOrigin(key) {
+        const scenario = state.scenarios[key];
+        removeScenarioMap(scenario);
+        resetScenarioOrigin(scenario, null);
+
+        if (key === 'primary') {
+            elements.primarySelect.value = '';
+            removeScenarioMap(state.scenarios.secondary);
+            resetScenarioOrigin(state.scenarios.secondary, null);
+            elements.secondarySelect.value = '';
+            state.comparing = false;
+            applyComparisonMode();
+        } else {
+            elements.secondarySelect.value = '';
         }
+
+        updateUrl();
+        fitMapToOrigins();
+        render();
     }
 
     function ensureSupportingData() {
@@ -572,19 +591,9 @@
         updateHeatmapControls();
         updateUrl();
         if (state.heatmap.active) {
-            activeScenarios().forEach((scenario) => {
-                if (scenario.layer && map.hasLayer(scenario.layer)) map.removeLayer(scenario.layer);
-            });
             await loadHeatmap();
-            if (state.municipalityLayer) map.fitBounds(state.municipalityLayer.getBounds().pad(0.04), { padding: [20, 20], maxZoom: 10 });
         } else {
             if (state.heatmap.layer && map.hasLayer(state.heatmap.layer)) map.removeLayer(state.heatmap.layer);
-            activeScenarios().forEach((scenario) => {
-                if (scenario.layer && scenario.zoneMinutes === state.minutes && !map.hasLayer(scenario.layer)) scenario.layer.addTo(map);
-                if (!scenario.routingReady) loadRouting(scenario);
-                if (scenario.zoneMinutes !== state.minutes) loadIsochrone(scenario);
-            });
-            if (state.scenarios.primary.origin) ensureSupportingData();
         }
         render();
     }
@@ -641,7 +650,7 @@
         const label = elements.heatmapToggle?.querySelector('strong');
         if (label) label.textContent = state.heatmap.active ? 'Skjul heatmap' : 'Vis heatmap for kommunen';
         if (elements.heatmapDescription) elements.heatmapDescription.hidden = !state.heatmap.active;
-        if (elements.standardLegend) elements.standardLegend.hidden = state.heatmap.active;
+        if (elements.standardLegend) elements.standardLegend.hidden = false;
         if (elements.heatmapLegend) elements.heatmapLegend.hidden = !state.heatmap.active || !state.heatmap.ready;
     }
 
@@ -687,7 +696,7 @@
                     ? { color: '#0f766e', weight: 2.2, opacity: 0.95, fillColor: '#2a9d8f', fillOpacity: state.comparing ? 0.14 : 0.18 }
                     : { color: '#6d5bd0', weight: 2.2, opacity: 0.95, fillColor: '#8776e6', fillOpacity: 0.14 },
             });
-            if (!state.heatmap.active) scenario.layer.addTo(map);
+            scenario.layer.addTo(map);
         } catch (error) {
             if (requestId === scenario.isochroneRequest) scenario.isochroneError = error.message;
         } finally {
@@ -718,21 +727,15 @@
         elements.mapSlider.disabled = !hasPrimary && !state.heatmap.active;
         elements.compareToggle.disabled = !hasPrimary;
         elements.selectionPrompt.hidden = hasPrimary || state.heatmap.active;
-        elements.status.hidden = !hasPrimary || state.heatmap.active;
-        elements.singleResults.hidden = !hasPrimary || state.comparing || state.heatmap.active;
-        elements.comparisonPanel.hidden = !hasPrimary || !state.comparing || state.heatmap.active;
-        elements.citiesSection.hidden = !hasPrimary || state.heatmap.active;
+        elements.status.hidden = !hasPrimary;
+        elements.singleResults.hidden = !hasPrimary || state.comparing;
+        elements.comparisonPanel.hidden = !hasPrimary || !state.comparing;
+        elements.citiesSection.hidden = !hasPrimary;
         elements.output.value = `${state.minutes} minutter`;
         elements.output.textContent = `${state.minutes} minutter`;
         elements.mapOutput.value = `${state.minutes} minutter`;
         elements.mapOutput.textContent = `${state.minutes} minutter`;
         updateHeatmapControls();
-        if (state.heatmap.active) {
-            elements.reached.textContent = state.heatmap.ready ? 'Heatmap' : 'Indlæser…';
-            updateMarkers();
-            updateMapLoading();
-            return;
-        }
         if (!hasPrimary) {
             elements.legendPrimary.textContent = 'Vælg udgangspunkt A';
             elements.reached.textContent = state.heatmap.active ? 'Heatmap' : 'Vælg by';
@@ -1568,18 +1571,15 @@
     }
 
     function updateMapLoading() {
-        if (state.heatmap.active) {
-            if (state.heatmap.error) {
-                elements.mapLoading.textContent = 'Heatmappet kunne ikke indlæses';
-                elements.mapLoading.classList.remove('is-hidden', 'is-prompt');
-                elements.mapLoading.classList.add('is-error');
-            } else if (state.heatmap.loading || !state.heatmap.ready) {
-                elements.mapLoading.textContent = 'Henter forberegnet heatmap…';
-                elements.mapLoading.classList.remove('is-hidden', 'is-error', 'is-prompt');
-            } else {
-                elements.mapLoading.classList.add('is-hidden');
-                elements.mapLoading.classList.remove('is-error', 'is-prompt');
-            }
+        if (state.heatmap.active && state.heatmap.error) {
+            elements.mapLoading.textContent = 'Heatmappet kunne ikke indlæses';
+            elements.mapLoading.classList.remove('is-hidden', 'is-prompt');
+            elements.mapLoading.classList.add('is-error');
+            return;
+        }
+        if (state.heatmap.active && (state.heatmap.loading || !state.heatmap.ready)) {
+            elements.mapLoading.textContent = 'Henter forberegnet heatmap…';
+            elements.mapLoading.classList.remove('is-hidden', 'is-error', 'is-prompt');
             return;
         }
         const active = activeScenarios();
@@ -1590,9 +1590,14 @@
             || (!state.geographyReady && Boolean(state.geographyError))
             || active.some((scenario) => (!scenario.routingReady && scenario.routeError) || scenario.isochroneError || scenario.analysisError);
         if (!state.scenarios.primary.origin) {
-            elements.mapLoading.textContent = 'Vælg en by for at starte';
-            elements.mapLoading.classList.remove('is-hidden', 'is-error');
-            elements.mapLoading.classList.add('is-prompt');
+            if (state.heatmap.active && state.heatmap.ready) {
+                elements.mapLoading.classList.add('is-hidden');
+                elements.mapLoading.classList.remove('is-error', 'is-prompt');
+            } else {
+                elements.mapLoading.textContent = 'Vælg en by for at starte';
+                elements.mapLoading.classList.remove('is-hidden', 'is-error');
+                elements.mapLoading.classList.add('is-prompt');
+            }
         } else if (state.comparing && !state.scenarios.secondary.origin) {
             elements.mapLoading.textContent = 'Vælg udgangspunkt B';
             elements.mapLoading.classList.remove('is-hidden', 'is-error');

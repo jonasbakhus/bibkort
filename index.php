@@ -138,7 +138,7 @@ header('Pragma: no-cache');
                     <label class="origin-field" for="origin-primary">
                         <span>Udgangspunkt A</span>
                         <select id="origin-primary" required>
-                            <option value="" selected>Vælg en by…</option>
+                            <option value="" selected>Ingen valgt</option>
                             <?php foreach ($originOptions as $id => $origin): ?>
                                 <option value="<?= htmlspecialchars($id, ENT_QUOTES, 'UTF-8') ?>"><?= htmlspecialchars($originOptionLabel($origin), ENT_QUOTES, 'UTF-8') ?></option>
                             <?php endforeach; ?>
@@ -149,7 +149,7 @@ header('Pragma: no-cache');
                     <label class="origin-field" for="origin-secondary">
                         <span>Udgangspunkt B</span>
                         <select id="origin-secondary">
-                            <option value="" selected>Vælg by B…</option>
+                            <option value="" selected>Ingen valgt</option>
                             <?php foreach ($originOptions as $id => $origin): ?>
                                 <option value="<?= htmlspecialchars($id, ENT_QUOTES, 'UTF-8') ?>"><?= htmlspecialchars($originOptionLabel($origin), ENT_QUOTES, 'UTF-8') ?></option>
                             <?php endforeach; ?>
