@@ -81,16 +81,27 @@ const interaction = await call('Runtime.evaluate', {
         return Number(slider.value);
     })()`,
 });
-await new Promise((resolve) => setTimeout(resolve, 350));
-const afterInteraction = (await call('Runtime.evaluate', {
-    returnByValue: true,
-    expression: `({
-        minutes: Number(new URL(location.href).searchParams.get('minutes')),
-        legendMin: document.querySelector('#heatmap-min')?.textContent?.trim(),
-        canvas: Boolean(document.querySelector('.leaflet-heat-surface')),
-        loadingHidden: document.querySelector('#map-loading')?.classList.contains('is-hidden'),
-    })`,
-})).result.value;
+const afterInteractionStarted = Date.now();
+let afterInteraction = null;
+while (Date.now() - afterInteractionStarted < 45000) {
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    afterInteraction = (await call('Runtime.evaluate', {
+        returnByValue: true,
+        expression: `(() => {
+            const hasOrigin = new URL(location.href).searchParams.has('origin');
+            const loadingHidden = document.querySelector('#map-loading')?.classList.contains('is-hidden');
+            const canvas = Boolean(document.querySelector('.leaflet-heat-surface'));
+            return {
+                ready: canvas && (!hasOrigin || loadingHidden),
+                minutes: Number(new URL(location.href).searchParams.get('minutes')),
+                legendMin: document.querySelector('#heatmap-min')?.textContent?.trim(),
+                canvas,
+                loadingHidden,
+            };
+        })()`,
+    })).result.value;
+    if (afterInteraction?.ready) break;
+}
 socket.close();
 console.log(JSON.stringify({ ...result, interaction: afterInteraction, errors }));
 if (!result || result.active !== 'true' || !result.legendVisible || !result.canvas || !result.sliderEnabled || !result.descriptionVisible || !result.loadingHidden || afterInteraction.minutes !== interaction.result.value || !afterInteraction.canvas || !afterInteraction.loadingHidden || errors.length) process.exitCode = 1;

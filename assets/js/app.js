@@ -656,6 +656,8 @@
 
     map.on('click', (event) => {
         if (!state.heatmap.active || !state.heatmap.ready || !state.heatmap.layer) return;
+        const clickTarget = event.originalEvent?.target;
+        if (clickTarget instanceof Element && clickTarget.closest('.leaflet-interactive, .leaflet-marker-icon, .leaflet-popup')) return;
         const point = state.heatmap.layer.nearest(event.latlng);
         if (!point) return;
         const value = Number(point[2]?.[state.heatmap.minuteIndex] || 0);
