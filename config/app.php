@@ -226,6 +226,8 @@ return [
         'population_table' => 'BY3',
         'urban_weight' => 0.90,
         'rural_weight' => 0.10,
+        // Mild størrelsesvægt: større byer antages at have lidt flere job pr. indbygger.
+        'urban_population_exponent' => 1.10,
         // Ca. 100 meter. Landzoneandelen er kun 10 %, så denne præcision er rigelig og langt hurtigere.
         'boundary_simplify_tolerance' => 0.001,
         'cache_ttl' => 30 * 24 * 60 * 60,
@@ -281,6 +283,7 @@ return [
         ['id' => 'hurup', 'name' => 'Hurup Thy', 'lat' => 56.7511648, 'lon' => 8.4178998, 'municipalityCode' => '787', 'municipality' => 'Thisted'],
         ['id' => 'hanstholm', 'name' => 'Hanstholm', 'lat' => 57.1150165, 'lon' => 8.6144947, 'municipalityCode' => '787', 'municipality' => 'Thisted'],
         ['id' => 'ikast', 'name' => 'Ikast', 'lat' => 56.136371, 'lon' => 9.1545969, 'municipalityCode' => '756', 'municipality' => 'Ikast-Brande'],
+        ['id' => 'bording', 'name' => 'Bording', 'lat' => 56.14503203, 'lon' => 9.27352163, 'municipalityCode' => '756', 'municipality' => 'Ikast-Brande'],
         ['id' => 'brande', 'name' => 'Brande', 'lat' => 55.9426864, 'lon' => 9.1287953, 'municipalityCode' => '756', 'municipality' => 'Ikast-Brande'],
         ['id' => 'engesvang', 'name' => 'Engesvang', 'lat' => 56.1703216, 'lon' => 9.3511945, 'municipalityCode' => '756', 'municipality' => 'Ikast-Brande'],
         ['id' => 'silkeborg', 'name' => 'Silkeborg', 'lat' => 56.176362, 'lon' => 9.5549217, 'municipalityCode' => '740', 'municipality' => 'Silkeborg'],

@@ -37,7 +37,7 @@ try {
                 $calibration
             )
             : new ValhallaProvider($routingConfig['base_url']);
-        $cacheKey = 'routing-matrix-' . sha1(json_encode([$origin, $config['cities'], $provider->name(), $calibrationVersion, $calibration]));
+        $cacheKey = 'routing-matrix-v2-' . sha1(json_encode([$origin, $config['cities'], $provider->name(), $calibrationVersion, $calibration]));
         $cached = app_cache_read($cacheKey, $ttl);
         if ($cached !== null) {
             app_json_response([

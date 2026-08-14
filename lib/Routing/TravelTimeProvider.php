@@ -53,6 +53,18 @@ final class TravelTimeProvider
 
     public function matrix(array $origin, array $cities): array
     {
+        $routes = [];
+        // Store /time-filter/fast-kald kan skifte beregningsadfærd tæt på tjenestens
+        // praktiske lokationsgrænse. Mindre bidder giver stabile tider og bevarer rækkefølgen.
+        foreach (array_chunk($cities, 50) as $cityBatch) {
+            $routes = array_merge($routes, $this->matrixBatch($origin, $cityBatch));
+        }
+
+        return $routes;
+    }
+
+    private function matrixBatch(array $origin, array $cities): array
+    {
         $destinationIds = [];
         $locations = [['id' => 'origin', 'coords' => $this->coords($origin)]];
         foreach ($cities as $index => $city) {

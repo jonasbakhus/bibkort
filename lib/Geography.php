@@ -151,6 +151,7 @@ function app_fetch_analysis_geography(array $config): array
         'weights' => [
             'urban' => (float) $config['geography']['urban_weight'],
             'rural' => (float) $config['geography']['rural_weight'],
+            'urbanPopulationExponent' => (float) $config['geography']['urban_population_exponent'],
         ],
         'source' => 'Danmarks Statistik BY3 og Dataforsyningen',
     ];

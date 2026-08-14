@@ -5,7 +5,7 @@ declare(strict_types=1);
 // Genereret 13. august 2026 fra 602 gyldige ruter i en 27 x 23 Google Routes-kontrolmatrix.
 // Modellen er en lineær tidskurve pr. udgangspunkt: vist tid = rå TravelTime-tid * slope + intercept_seconds.
 return [
-    'version' => 'google-routes-2026-08-13-v1',
+    'version' => 'google-routes-2026-08-14-v2',
     'reference' => [
         'provider' => 'Google Routes API',
         'routing_preference' => 'TRAFFIC_UNAWARE',
@@ -16,7 +16,8 @@ return [
     'default' => ['intercept_seconds' => -229, 'slope' => 0.991830],
     'origins' => [
         'lemvig' => ['intercept_seconds' => -225, 'slope' => 1.029540],
-        'baekmarksbro' => ['intercept_seconds' => -196, 'slope' => 1.029568],
+        // Hele kurven er forskudt med Bækmarksbro–Bording = 60 min. som lokalt kontrolanker.
+        'baekmarksbro' => ['intercept_seconds' => -91, 'slope' => 1.029568],
         'thyboroen' => ['intercept_seconds' => -422, 'slope' => 0.964114],
         'harbooere' => ['intercept_seconds' => -326, 'slope' => 0.991811],
         'noerre_nissum' => ['intercept_seconds' => -381, 'slope' => 1.017707],

@@ -534,9 +534,7 @@
     function calculateScenario(scenario) {
         if (!scenario.origin) return { ready: false, selected: false, error: null, reachedCities: [], jobs: null, workplaces: null, largest: null, branches: [], municipalityBreakdown: [], coverage: {} };
         const reachedCities = scenario.routingReady
-            ? scenario.cities.filter((city) => config.reachability === 'zone' && scenario.geojson
-                ? pointInZone(city.lon, city.lat, scenario.geojson)
-                : city.travelSeconds !== null && city.travelSeconds <= state.minutes * 60)
+            ? scenario.cities.filter((city) => cityReached(scenario, city))
             : [];
         const analysisCurrent = scenario.analysisStatus === 'ready'
             && scenario.zoneMinutes === state.minutes
@@ -546,7 +544,7 @@
             return { ready: false, error: calculationError, reachedCities, jobs: null, workplaces: null, largest: null, branches: [], municipalityBreakdown: [], coverage: {} };
         }
         const largest = [...reachedCities]
-            .sort((a, b) => estimatedCityJobs(b, scenario.analysis.coverage) - estimatedCityJobs(a, scenario.analysis.coverage))[0] || null;
+            .sort((a, b) => estimatedSettlementJobs(b) - estimatedSettlementJobs(a))[0] || null;
         return { ready: true, reachedCities, largest, ...scenario.analysis };
     }
 
@@ -560,10 +558,10 @@
 
         Object.entries(state.municipalities).forEach(([code, municipality]) => {
             const settlements = state.settlementsByMunicipality.get(code) || [];
-            const totalPopulation = settlements.reduce((sum, settlement) => sum + settlement.population, 0);
-            const coveredSettlements = settlements.filter((settlement) => pointInZone(settlement.lon, settlement.lat, scenario.geojson));
-            const coveredPopulation = coveredSettlements.reduce((sum, settlement) => sum + settlement.population, 0);
-            const urbanCoverage = totalPopulation > 0 ? coveredPopulation / totalPopulation : 0;
+            const totalUrbanWeight = settlements.reduce((sum, settlement) => sum + settlementUrbanWeight(settlement), 0);
+            const coveredSettlements = settlements.filter((settlement) => settlementReached(scenario, settlement));
+            const coveredUrbanWeight = coveredSettlements.reduce((sum, settlement) => sum + settlementUrbanWeight(settlement), 0);
+            const urbanCoverage = totalUrbanWeight > 0 ? coveredUrbanWeight / totalUrbanWeight : 0;
             const ruralGeography = polygonCoverageMetrics(state.municipalityBoundaries.get(code), scenario.geojson);
             const ruralCoverage = ruralGeography.fraction;
             const uncoveredRuralJobs = Number.isFinite(municipality.jobs)
@@ -604,8 +602,8 @@
                 const cityJobs = coveredSettlements
                     .map((settlement) => ({
                         name: settlement.name,
-                        rawJobs: totalPopulation > 0
-                            ? municipality.jobs * state.geography.weights.urban * settlement.population / totalPopulation
+                        rawJobs: totalUrbanWeight > 0
+                            ? municipality.jobs * state.geography.weights.urban * settlementUrbanWeight(settlement) / totalUrbanWeight
                             : 0,
                     }))
                     .map((settlement) => ({ ...settlement, jobs: Math.floor(settlement.rawJobs), fraction: settlement.rawJobs % 1 }))
@@ -752,9 +750,17 @@
         }
     }
 
-    function estimatedCityJobs(city, coverage) {
-        const municipality = state.municipalities[city.municipalityCode];
-        return (municipality?.jobs || 0) * (coverage[city.municipalityCode]?.factor || 0);
+    function settlementUrbanWeight(settlement) {
+        const population = Math.max(0, Number(settlement?.population) || 0);
+        const exponent = Number(state.geography?.weights?.urbanPopulationExponent) || 1;
+        return Math.pow(population, exponent);
+    }
+
+    function settlementReached(scenario, settlement) {
+        const routeCity = scenario.cities.find((city) => String(city.municipalityCode) === String(settlement.municipalityCode)
+            && normalizedPlaceName(city.name) === normalizedPlaceName(settlement.name));
+        if (routeCity) return cityReached(scenario, routeCity);
+        return Boolean(scenario.geojson) && pointInZone(settlement.lon, settlement.lat, scenario.geojson);
     }
 
     function renderStatus() {
@@ -764,7 +770,8 @@
             elements.status.textContent = [...new Set(errors)].join(' ');
             elements.status.className = 'data-status is-warning';
         } else if (state.statsReady && state.geographyReady && active.every((scenario) => scenario.routingReady && scenario.analysisStatus === 'ready')) {
-            elements.status.textContent = `ERHV2 ${state.statsYear} · BY3 ${state.geography.year} · geografisk 90/10-model.`;
+            const exponent = Number(state.geography.weights.urbanPopulationExponent || 1).toLocaleString('da-DK', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+            elements.status.textContent = `ERHV2 ${state.statsYear} · BY3 ${state.geography.year} · 90/10-model · byvægt ${exponent}.`;
             elements.status.className = 'data-status is-ready';
         } else {
             elements.status.textContent = 'Henter køretider, geografi og jobtal…';
@@ -1110,21 +1117,29 @@
         if (primaryReached && secondaryReached) return 'both';
         if (primaryReached) return 'reached';
         if (secondaryReached) return 'secondary';
-        const near = [primary, secondary].some((city) => city && city.travelSeconds !== null && Math.abs(city.travelSeconds / 60 - state.minutes) <= 5);
+        const near = [primary, secondary].some((city) => {
+            const minutes = cityTravelMinutes(city);
+            return minutes !== null && minutes > state.minutes && minutes - state.minutes <= 5;
+        });
         return near ? 'near' : 'muted';
     }
 
     function singleCityStatus(scenario, city) {
         if (!city || city.travelSeconds === null) return 'muted';
         if (config.reachability === 'zone') return cityReached(scenario, city) ? 'reached' : 'muted';
-        const difference = city.travelSeconds / 60 - state.minutes;
-        if (Math.abs(difference) <= 5) return 'near';
-        return difference <= 0 ? 'reached' : 'muted';
+        const difference = cityTravelMinutes(city) - state.minutes;
+        if (difference <= 0) return 'reached';
+        return difference <= 5 ? 'near' : 'muted';
     }
 
     function cityReached(scenario, city) {
         if (config.reachability === 'zone' && scenario.geojson && city) return pointInZone(city.lon, city.lat, scenario.geojson);
-        return city?.travelSeconds !== null && city?.travelSeconds !== undefined && city.travelSeconds <= state.minutes * 60;
+        const minutes = cityTravelMinutes(city);
+        return minutes !== null && minutes <= state.minutes;
+    }
+
+    function cityTravelMinutes(city) {
+        return city?.travelSeconds === null || city?.travelSeconds === undefined ? null : Math.round(city.travelSeconds / 60);
     }
 
     function cityFor(scenario, id) {
@@ -1150,7 +1165,7 @@
         const cityJobs = estimatedSettlementJobs(city);
         const cityJobsLine = cityJobs === null
             ? ''
-            : `<span class="city-model-jobs">Byandel i 90/10-modellen: <strong>${numberFormat.format(cityJobs)} job</strong></span>`;
+            : `<span class="city-model-jobs">Størrelsesvægtet byandel: <strong>${numberFormat.format(cityJobs)} job</strong></span>`;
         const selection = canSelect ? originSelectionActions(city.id) : '';
         return `<div class="city-popup"><strong>${escapeHtml(city.name)}</strong>${routes}<span>${escapeHtml(city.municipality)} Kommune</span>${cityJobsLine}${selection}</div>`;
     }
@@ -1181,9 +1196,9 @@
         const municipality = state.municipalities[city.municipalityCode];
         const settlements = state.settlementsByMunicipality.get(String(city.municipalityCode)) || [];
         const settlement = settlements.find((item) => normalizedPlaceName(item.name) === normalizedPlaceName(city.name));
-        const totalPopulation = settlements.reduce((sum, item) => sum + item.population, 0);
-        if (!settlement || !Number.isFinite(municipality?.jobs) || totalPopulation <= 0) return null;
-        return Math.round(municipality.jobs * state.geography.weights.urban * settlement.population / totalPopulation);
+        const totalUrbanWeight = settlements.reduce((sum, item) => sum + settlementUrbanWeight(item), 0);
+        if (!settlement || !Number.isFinite(municipality?.jobs) || totalUrbanWeight <= 0) return null;
+        return Math.round(municipality.jobs * state.geography.weights.urban * settlementUrbanWeight(settlement) / totalUrbanWeight);
     }
 
     function normalizedPlaceName(name) {
