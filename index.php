@@ -39,6 +39,7 @@ $clientConfig = [
         'statbank' => 'api/statbank.php',
         'geography' => 'api/geography.php',
         'boundary' => 'api/boundary.php',
+        'heatmap' => 'assets/data/job-heatmap.json',
     ],
 ];
 $assetFiles = [
@@ -47,11 +48,16 @@ $assetFiles = [
     __DIR__ . '/assets/js/analysis-worker.js',
     __DIR__ . '/assets/brand/land-og-by-logo.svg',
 ];
+$heatmapDataFile = __DIR__ . '/assets/data/job-heatmap.json';
+if (is_file($heatmapDataFile)) {
+    $assetFiles[] = $heatmapDataFile;
+}
 $assetVersion = substr(hash('sha256', implode('|', array_map(
     static fn (string $file): string => (string) hash_file('sha256', $file),
     $assetFiles
 ))), 0, 12);
 $clientConfig['analysisWorker'] = 'assets/js/analysis-worker.js?v=' . $assetVersion;
+$clientConfig['endpoints']['heatmap'] .= '?v=' . $assetVersion;
 $host = strtolower((string) ($_SERVER['HTTP_HOST'] ?? ''));
 $isStaging = str_starts_with($host, 'testbibkort.') || str_starts_with($host, 'testbibg.');
 $isGoogle = $config['variant'] === 'google';
@@ -86,6 +92,9 @@ header('Pragma: no-cache');
                 <button id="map-size-toggle" class="map-size-toggle" type="button" aria-expanded="false" aria-controls="map">
                     <span class="map-size-icon" aria-hidden="true"></span><span>Udvid kort</span>
                 </button>
+                <button id="map-heatmap-toggle" class="map-heatmap-toggle" type="button" aria-pressed="false">
+                    <span class="heatmap-icon" aria-hidden="true"></span><span>Heatmap</span>
+                </button>
             </div>
             <section class="map-expanded-time-control" aria-label="Køretid på det udvidede kort">
                 <div><span>Maksimal køretid</span><output id="map-time-output" for="map-time-slider"><?= (int) $config['slider']['default'] ?> minutter</output></div>
@@ -100,6 +109,11 @@ header('Pragma: no-cache');
                 <span><i class="legend-dot boundary-point-dot"></i>Kommunegrænsepunkt</span>
                 <span><i class="legend-line municipality-line"></i>Lemvig Kommune</span>
                 <span><i class="legend-line context-municipality-line"></i>Andre kommuner</span>
+            </div>
+            <div id="heatmap-legend" class="heatmap-legend" aria-hidden="true" hidden>
+                <strong>Anslåede job inden for køretiden</strong>
+                <span class="heatmap-gradient"></span>
+                <span class="heatmap-scale"><i id="heatmap-min">Lavere</i><i id="heatmap-max">Højere</i></span>
             </div>
             <div id="map-loading" class="map-loading is-prompt" role="status">Vælg en by for at starte</div>
         </section>
@@ -151,6 +165,14 @@ header('Pragma: no-cache');
                 </div>
                 <input id="time-slider" type="range" min="<?= (int) $config['slider']['min'] ?>" max="<?= (int) $config['slider']['max'] ?>" step="<?= (int) $config['slider']['step'] ?>" value="<?= (int) $config['slider']['default'] ?>" aria-label="Maksimal køretid i minutter" disabled>
                 <div class="range-labels" aria-hidden="true"><span><?= (int) $config['slider']['min'] ?> min</span><span><?= (int) $config['slider']['max'] ?> min</span></div>
+            </section>
+
+            <section class="heatmap-control" aria-labelledby="heatmap-title">
+                <button id="heatmap-toggle" type="button" aria-pressed="false">
+                    <span class="heatmap-toggle-icon" aria-hidden="true"></span>
+                    <span><strong id="heatmap-title">Vis heatmap for kommunen</strong><small>Se hvor mange job der kan nås fra et tæt 500-meter net.</small></span>
+                </button>
+                <p id="heatmap-description" hidden>Heatmappet er en forberegnet screeningsvisning. Klik på kortet for et anslået jobtal; vælg en by for den fulde zoneanalyse.</p>
             </section>
 
             <div id="selection-prompt" class="selection-prompt" role="status"><strong>Start med at vælge en by</strong><span>Kortet favoriserer ikke et bestemt udgangspunkt. Alle byer starter på lige fod.</span></div>

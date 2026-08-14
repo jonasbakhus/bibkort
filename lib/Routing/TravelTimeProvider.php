@@ -63,6 +63,84 @@ final class TravelTimeProvider
         return $routes;
     }
 
+    /**
+     * Beregn mange lokale udgangspunkter mod nogle få destinationer i ét API-kald.
+     *
+     * Metoden bruges kun af den offline heatmap-generator. Den returnerer rå
+     * TravelTime-sekunder, fordi hvert 500-meterpunkt efterfølgende får sin egen
+     * geografisk interpolerede Google-kalibrering.
+     *
+     * @return array<string, array<string, int|null>> destination-id => origin-id => sekunder
+     */
+    public function rawManyToOneMatrix(array $origins, array $destinations): array
+    {
+        if ($origins === [] || $destinations === []) {
+            return [];
+        }
+        if (count($destinations) > 10) {
+            throw new InvalidArgumentException('TravelTime tillader højst 10 matrixsøgninger pr. kald.');
+        }
+
+        $locations = [];
+        $originIds = [];
+        foreach ($origins as $index => $origin) {
+            $originId = 'heat-origin-' . $index;
+            $originIds[$originId] = (string) $origin['id'];
+            $locations[] = ['id' => $originId, 'coords' => $this->coords($origin)];
+        }
+
+        $searches = [];
+        $destinationIds = [];
+        foreach ($destinations as $index => $destination) {
+            $locationId = 'heat-destination-' . $index;
+            $searchId = 'heat-search-' . $index;
+            $destinationIds[$searchId] = (string) $destination['id'];
+            $locations[] = ['id' => $locationId, 'coords' => $this->coords($destination)];
+            $searches[] = [
+                'id' => $searchId,
+                'departure_location_ids' => array_keys($originIds),
+                'arrival_location_id' => $locationId,
+                'transportation' => ['type' => 'driving'],
+                'travel_time' => 3 * 60 * 60,
+                'arrival_time_period' => 'weekday_morning',
+                'properties' => ['travel_time'],
+            ];
+        }
+
+        $data = $this->request('/time-filter/fast', [
+            'locations' => $locations,
+            'arrival_searches' => ['many_to_one' => $searches],
+        ]);
+        if (!is_array($data['results'] ?? null)) {
+            throw new RuntimeException('TravelTime returnerede ikke en gyldig heatmap-matrix.');
+        }
+
+        $matrix = [];
+        foreach ($data['results'] as $result) {
+            $searchId = (string) ($result['search_id'] ?? '');
+            $destinationId = $destinationIds[$searchId] ?? null;
+            if ($destinationId === null || !is_array($result['locations'] ?? null)) {
+                continue;
+            }
+            foreach ($result['locations'] as $route) {
+                $originId = $originIds[(string) ($route['id'] ?? '')] ?? null;
+                if ($originId === null) {
+                    continue;
+                }
+                $seconds = $route['properties']['travel_time'] ?? null;
+                $matrix[$destinationId][$originId] = is_numeric($seconds) ? (int) round((float) $seconds) : null;
+            }
+            foreach ($result['unreachable'] ?? [] as $unreachable) {
+                $originId = $originIds[(string) ($unreachable['id'] ?? '')] ?? null;
+                if ($originId !== null && !array_key_exists($originId, $matrix[$destinationId] ?? [])) {
+                    $matrix[$destinationId][$originId] = null;
+                }
+            }
+        }
+
+        return $matrix;
+    }
+
     private function matrixBatch(array $origin, array $cities): array
     {
         $destinationIds = [];

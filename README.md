@@ -7,7 +7,7 @@ Appen er bygget til et almindeligt PHP-webhotel og kræver ingen database, Compo
 
 - 15–90 minutters køretidsområde i trin på 5 minutter
 - 26 byer og lokalsamfund i Lemvig Kommune samt fem punkter ved kommunegrænsen kan vælges som udgangspunkt
-- delbare valg via URL-parametrene `origin`, `compare` og `minutes`
+- delbare valg via URL-parametrene `origin`, `compare`, `minutes` og `view=heatmap`
 - to udgangspunkter kan sammenlignes med hver sin zone, nøgletal og branchegraf
 - TravelTime-isochroner baseret på vejnettet, ikke simple cirkler; Valhalla bruges som lokal fallback uden nøgler
 - byernes start- og slutpunkter er fastlagt ensartet og dokumenteret, så ingen by favoriseres i modellen
@@ -16,6 +16,7 @@ Appen er bygget til et almindeligt PHP-webhotel og kræver ingen database, Compo
 - servercache af både isochroner, køretidsmatrix og Statistikbank-data
 - seneste tilgængelige ERHV2-år findes automatisk
 - geografisk 90/10-model for job, arbejdssteder og brancher inde i selve zonen
+- forberegnet jobheatmap i et 500-meter net over hele Lemvig Kommune, uden API-kald ved almindelige besøg
 - officielle BY3-befolkningstal for byfordeling og kommunegrænser fra Dataforsyningen til landzoneoverlap
 - dynamisk rutematrix for officielle BY3-byer til og med den valgte tid plus 5 minutter; ved 90 minutter dækkes nærzonen derfor til 95 minutter
 - synlig kilde-, årgangs- og formelforklaring for hver byandel i resultatlisterne
@@ -37,7 +38,10 @@ lib/Geography.php              Samler BY3 og Dataforsyningens geometri
 lib/Routing/TravelTimeProvider.php TravelTime-provider til flade og matrix
 lib/Routing/GoogleRoutesMatrixClient.php Google-kontrolmatrix til manuel genkalibrering
 lib/Routing/ValhallaProvider.php  Isoleret routing-provider
+lib/Heatmap.php                Geometri og lokal kalibrering til heatmap-generatoren
 config/routing-calibration.php    Versionsstyrede kalibreringskurver
+scripts/generate-job-heatmap.php  Offline-bygning af den statiske heatmap-flade
+assets/data/job-heatmap.json      Versionsstyrede, forberegnede heatmap-tal
 cache/                         Genererede cachefiler (ignoreres af Git)
 ```
 
@@ -53,6 +57,8 @@ cache/                         Genererede cachefiler (ignoreres af Git)
 TravelTime-oplysninger læses fra miljøvariablerne `BIBKORT_TRAVELTIME_APP_ID` og `BIBKORT_TRAVELTIME_API_KEY` eller fra den Git-ignorerede fil `config/secrets.php`. Kopiér `config/secrets.example.php` som udgangspunkt. Hvis oplysningerne ikke findes, bruger appen Valhalla. Provider kan desuden vælges eksplicit med `BIBKORT_ROUTING_PROVIDER`.
 
 Google Routes bruges kun som kontrolgrundlag ved en bevidst genkalibrering. Den versionerede kontrolmatrix omfatter 27 udgangspunkter og 23 kontrolbyer, i alt 621 ruter, med én lineær tidskurve pr. udgangspunkt. Eventuelle lokale kontrolankre flytter hele kurven for det pågældende udgangspunkt og er ikke særregler for enkelte destinationer. De fem kommunegrænsepunkter bruger foreløbig samme lokale kurve som det oprindelige grænsepunkt indtil næste brede genkalibrering. API-nøglen bliver på serveren; Google kaldes ikke ved almindelige besøg. Kør `php scripts/calibrate-routing.php > cache/google-routes-calibration.json`, gennemgå valideringen, og versionsstyr derefter de godkendte koefficienter i `config/routing-calibration.php`.
+
+Heatmappet bygges offline med `php scripts/generate-job-heatmap.php`. Generatoren lægger et 500-meter net inden for Lemvig Kommunes geometri og sender netpunkterne som afgangssteder til TravelTime `time-filter/fast`. 90 %-bydelen repræsenteres af alle officielle BY3-punkter med samme `befolkning^1,10`-vægt som hovedanalysen. 10 %-landdelen repræsenteres af et arealfordelt 8-kilometer sample i hver analysekommune. Kalibreringskurven ved et vilkårligt netpunkt interpoleres fra de fire nærmeste lokale, Google-kalibrerede udgangspunkter med invers afstand i anden. Den færdige JSON indeholder kun afledte jobtal for 15–90 minutter i femminutterstrin; den indeholder ingen API-nøgler eller rå leverandørsvar. Heatmappet er en screeningsflade, mens et valgt udgangspunkt fortsat bruger den fulde polygonbaserede 90/10-analyse.
 
 ## Lokal udvikling
 
@@ -76,6 +82,9 @@ php -l lib/Geography.php
 php -l lib/Routing/TravelTimeProvider.php
 php -l lib/Routing/GoogleRoutesMatrixClient.php
 php -l lib/Routing/ValhallaProvider.php
+php -l lib/Heatmap.php
+php -l scripts/generate-job-heatmap.php
+node --check assets/js/app.js
 ```
 
 ## Test-URL'er

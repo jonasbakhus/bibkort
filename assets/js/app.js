@@ -10,6 +10,7 @@
     const RURAL_TAIL_MIN_COVERAGE = 0.95;
     const RURAL_TAIL_MAX_JOBS = 100;
     const params = new URLSearchParams(window.location.search);
+    const initialHeatmapActive = params.get('view') === 'heatmap';
     const primaryId = validOrigin(params.get('origin')) ? params.get('origin') : null;
     let secondaryId = primaryId && validOrigin(params.get('compare')) ? params.get('compare') : null;
     if (secondaryId === primaryId) secondaryId = null;
@@ -39,6 +40,17 @@
         contextMunicipalityLayer: null,
         supportingDataStarted: false,
         mobileDisclosureApplied: false,
+        heatmap: {
+            active: initialHeatmapActive,
+            loading: false,
+            ready: false,
+            error: null,
+            data: null,
+            layer: null,
+            minuteIndex: 0,
+            low: 0,
+            high: 0,
+        },
         scenarios: {
             primary: makeScenario('primary', primaryId),
             secondary: makeScenario('secondary', secondaryId),
@@ -76,6 +88,13 @@
         selectionPrompt: document.getElementById('selection-prompt'),
         singleOriginName: document.getElementById('single-origin-name'),
         mapSizeToggle: document.getElementById('map-size-toggle'),
+        heatmapToggle: document.getElementById('heatmap-toggle'),
+        mapHeatmapToggle: document.getElementById('map-heatmap-toggle'),
+        heatmapDescription: document.getElementById('heatmap-description'),
+        standardLegend: document.querySelector('.map-legend'),
+        heatmapLegend: document.getElementById('heatmap-legend'),
+        heatmapMin: document.getElementById('heatmap-min'),
+        heatmapMax: document.getElementById('heatmap-max'),
         comparisonBranchesCompact: document.getElementById('comparison-branches-compact'),
         comparisonMunicipalities: document.getElementById('comparison-municipalities'),
         comparisonKeyPrimary: document.getElementById('comparison-key-primary'),
@@ -99,10 +118,12 @@
     map.createPane('isochrone-secondary');
     map.createPane('municipality-context');
     map.createPane('municipality-boundary');
+    map.createPane('heatmap-surface');
     map.getPane('isochrone-primary').style.zIndex = 350;
     map.getPane('isochrone-secondary').style.zIndex = 351;
     map.getPane('municipality-context').style.zIndex = 340;
     map.getPane('municipality-boundary').style.zIndex = 360;
+    map.getPane('heatmap-surface').style.zIndex = 345;
 
     L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
         maxZoom: 19,
@@ -111,6 +132,93 @@
     if (config.variant === 'google') {
         map.attributionControl.addAttribution('<span class="google-maps-attribution" translate="no">Google Maps</span>');
     }
+
+    const HeatSurfaceLayer = L.Layer.extend({
+        initialize(points, cellKm) {
+            this.points = points;
+            this.cellKm = Number(cellKm) || 0.5;
+            this.minuteIndex = 0;
+            this.low = 0;
+            this.high = 1;
+            this.frame = null;
+        },
+        onAdd(activeMap) {
+            this.map = activeMap;
+            this.canvas = L.DomUtil.create('canvas', 'leaflet-heat-surface leaflet-zoom-animated');
+            activeMap.getPane('heatmap-surface').appendChild(this.canvas);
+            activeMap.on('moveend zoomend resize', this.scheduleRedraw, this);
+            this.scheduleRedraw();
+        },
+        onRemove(activeMap) {
+            activeMap.off('moveend zoomend resize', this.scheduleRedraw, this);
+            if (this.frame) window.cancelAnimationFrame(this.frame);
+            this.canvas?.remove();
+            this.canvas = null;
+            this.map = null;
+        },
+        setMinuteIndex(index) {
+            this.minuteIndex = index;
+            const values = this.points
+                .map((point) => Number(point[2]?.[index] || 0))
+                .filter(Number.isFinite)
+                .sort((a, b) => a - b);
+            this.low = heatQuantile(values, 0.05);
+            this.high = Math.max(this.low + 1, heatQuantile(values, 0.95));
+            this.scheduleRedraw();
+            return { low: this.low, high: this.high };
+        },
+        scheduleRedraw() {
+            if (!this.map || this.frame) return;
+            this.frame = window.requestAnimationFrame(() => {
+                this.frame = null;
+                this.redraw();
+            });
+        },
+        redraw() {
+            if (!this.map || !this.canvas) return;
+            const size = this.map.getSize();
+            const ratio = Math.min(2, window.devicePixelRatio || 1);
+            const topLeft = this.map.containerPointToLayerPoint([0, 0]);
+            L.DomUtil.setPosition(this.canvas, topLeft);
+            this.canvas.width = Math.round(size.x * ratio);
+            this.canvas.height = Math.round(size.y * ratio);
+            this.canvas.style.width = `${size.x}px`;
+            this.canvas.style.height = `${size.y}px`;
+            const context = this.canvas.getContext('2d');
+            context.setTransform(ratio, 0, 0, ratio, 0, 0);
+            context.clearRect(0, 0, size.x, size.y);
+            context.globalAlpha = 0.72;
+            for (const point of this.points) {
+                const screen = this.map.latLngToContainerPoint([point[0], point[1]]);
+                if (screen.x < -20 || screen.y < -20 || screen.x > size.x + 20 || screen.y > size.y + 20) continue;
+                const east = this.map.latLngToContainerPoint([
+                    point[0],
+                    point[1] + this.cellKm / (111.32 * Math.max(0.2, Math.cos(point[0] * Math.PI / 180))),
+                ]);
+                const radius = Math.max(2.4, Math.abs(east.x - screen.x) * 0.72);
+                const value = Number(point[2]?.[this.minuteIndex] || 0);
+                const fraction = clamp((value - this.low) / (this.high - this.low), 0, 1);
+                context.beginPath();
+                context.arc(screen.x, screen.y, radius, 0, Math.PI * 2);
+                context.fillStyle = heatColor(fraction);
+                context.fill();
+            }
+            context.globalAlpha = 1;
+        },
+        nearest(latlng) {
+            let nearest = null;
+            let nearestDistance = Infinity;
+            for (const point of this.points) {
+                const distance = this.map.distance(latlng, L.latLng(point[0], point[1]));
+                if (distance < nearestDistance) {
+                    nearest = point;
+                    nearestDistance = distance;
+                }
+            }
+            return nearestDistance <= Math.max(900, this.cellKm * 1600) ? nearest : null;
+        },
+    });
+
     loadMunicipalityBoundary();
 
     config.cities.forEach(addCityMarker);
@@ -201,6 +309,8 @@
     elements.primarySelect.addEventListener('change', () => selectOrigin('primary', elements.primarySelect.value));
     elements.secondarySelect.addEventListener('change', () => selectOrigin('secondary', elements.secondarySelect.value));
     elements.mapSizeToggle?.addEventListener('click', toggleMobileMap);
+    elements.heatmapToggle?.addEventListener('click', toggleHeatmap);
+    elements.mapHeatmapToggle?.addEventListener('click', toggleHeatmap);
     elements.compareToggle.addEventListener('click', () => {
         if (!state.scenarios.primary.origin) return;
         state.comparing = !state.comparing;
@@ -208,8 +318,10 @@
         updateUrl();
         if (state.comparing && state.scenarios.secondary.origin) {
             addOriginMarker(state.scenarios.secondary);
-            loadRouting(state.scenarios.secondary);
-            loadIsochrone(state.scenarios.secondary);
+            if (!state.heatmap.active) {
+                loadRouting(state.scenarios.secondary);
+                loadIsochrone(state.scenarios.secondary);
+            }
         } else {
             removeScenarioMap(state.scenarios.secondary);
         }
@@ -222,6 +334,11 @@
         state.minutes = Number(elements.slider.value);
         updateSliderProgress();
         updateUrl();
+        if (state.heatmap.active) {
+            updateHeatmapMinute();
+            render();
+            return;
+        }
         activeScenarios().forEach((scenario) => {
             scenario.isochroneRequest += 1;
             scenario.isochroneLoading = true;
@@ -241,16 +358,18 @@
         elements.slider.dispatchEvent(new Event('input', { bubbles: true }));
     });
 
-    if (state.scenarios.primary.origin) {
+    updateHeatmapControls();
+    if (state.scenarios.primary.origin && !state.heatmap.active) {
         applyMobileDisclosureDefaults();
         ensureSupportingData();
         loadRouting(state.scenarios.primary);
         loadIsochrone(state.scenarios.primary);
     }
-    if (state.comparing && state.scenarios.secondary.origin) {
+    if (state.comparing && state.scenarios.secondary.origin && !state.heatmap.active) {
         loadRouting(state.scenarios.secondary);
         loadIsochrone(state.scenarios.secondary);
     }
+    if (state.heatmap.active) loadHeatmap();
     render();
 
     function makeScenario(key, originId) {
@@ -320,8 +439,10 @@
         updateUrl();
         fitMapToOrigins();
         render();
-        loadRouting(scenario);
-        loadIsochrone(scenario);
+        if (!state.heatmap.active) {
+            loadRouting(scenario);
+            loadIsochrone(scenario);
+        }
     }
 
     function ensureSupportingData() {
@@ -446,6 +567,95 @@
         render();
     }
 
+    async function toggleHeatmap() {
+        state.heatmap.active = !state.heatmap.active;
+        updateHeatmapControls();
+        updateUrl();
+        if (state.heatmap.active) {
+            activeScenarios().forEach((scenario) => {
+                if (scenario.layer && map.hasLayer(scenario.layer)) map.removeLayer(scenario.layer);
+            });
+            await loadHeatmap();
+            if (state.municipalityLayer) map.fitBounds(state.municipalityLayer.getBounds().pad(0.04), { padding: [20, 20], maxZoom: 10 });
+        } else {
+            if (state.heatmap.layer && map.hasLayer(state.heatmap.layer)) map.removeLayer(state.heatmap.layer);
+            activeScenarios().forEach((scenario) => {
+                if (scenario.layer && scenario.zoneMinutes === state.minutes && !map.hasLayer(scenario.layer)) scenario.layer.addTo(map);
+                if (!scenario.routingReady) loadRouting(scenario);
+                if (scenario.zoneMinutes !== state.minutes) loadIsochrone(scenario);
+            });
+            if (state.scenarios.primary.origin) ensureSupportingData();
+        }
+        render();
+    }
+
+    async function loadHeatmap() {
+        if (state.heatmap.ready) {
+            if (state.heatmap.active && state.heatmap.layer && !map.hasLayer(state.heatmap.layer)) state.heatmap.layer.addTo(map);
+            updateHeatmapMinute();
+            return;
+        }
+        if (state.heatmap.loading) return;
+        state.heatmap.loading = true;
+        state.heatmap.error = null;
+        render();
+        try {
+            const response = await fetchJson(config.endpoints.heatmap);
+            if (!Array.isArray(response.points) || !Array.isArray(response.minutes) || response.points.length === 0) {
+                throw new Error('Heatmap-data har et ugyldigt format.');
+            }
+            state.heatmap.data = response;
+            state.heatmap.layer = new HeatSurfaceLayer(response.points, response.cellKm);
+            state.heatmap.ready = true;
+            if (state.heatmap.active) state.heatmap.layer.addTo(map);
+            updateHeatmapMinute();
+        } catch (error) {
+            state.heatmap.error = error.message;
+        } finally {
+            state.heatmap.loading = false;
+            updateHeatmapControls();
+            render();
+        }
+    }
+
+    function updateHeatmapMinute() {
+        if (!state.heatmap.ready || !state.heatmap.layer) return;
+        const available = state.heatmap.data.minutes.map(Number);
+        let index = available.indexOf(state.minutes);
+        if (index < 0) {
+            index = available.reduce((best, minute, candidate) => Math.abs(minute - state.minutes) < Math.abs(available[best] - state.minutes) ? candidate : best, 0);
+        }
+        state.heatmap.minuteIndex = index;
+        const scale = state.heatmap.layer.setMinuteIndex(index);
+        state.heatmap.low = scale.low;
+        state.heatmap.high = scale.high;
+        elements.heatmapMin.textContent = `${numberFormat.format(Math.round(scale.low))} job`;
+        elements.heatmapMax.textContent = `${numberFormat.format(Math.round(scale.high))} job eller flere`;
+        updateHeatmapControls();
+    }
+
+    function updateHeatmapControls() {
+        [elements.heatmapToggle, elements.mapHeatmapToggle].forEach((button) => {
+            if (button) button.setAttribute('aria-pressed', String(state.heatmap.active));
+        });
+        const label = elements.heatmapToggle?.querySelector('strong');
+        if (label) label.textContent = state.heatmap.active ? 'Skjul heatmap' : 'Vis heatmap for kommunen';
+        if (elements.heatmapDescription) elements.heatmapDescription.hidden = !state.heatmap.active;
+        if (elements.standardLegend) elements.standardLegend.hidden = state.heatmap.active;
+        if (elements.heatmapLegend) elements.heatmapLegend.hidden = !state.heatmap.active || !state.heatmap.ready;
+    }
+
+    map.on('click', (event) => {
+        if (!state.heatmap.active || !state.heatmap.ready || !state.heatmap.layer) return;
+        const point = state.heatmap.layer.nearest(event.latlng);
+        if (!point) return;
+        const value = Number(point[2]?.[state.heatmap.minuteIndex] || 0);
+        L.popup({ closeButton: true, maxWidth: 260 })
+            .setLatLng([point[0], point[1]])
+            .setContent(`<div class="heatmap-popup"><strong>${numberFormat.format(Math.round(value))} anslåede job</strong><span>kan nås inden for ${state.minutes} minutter fra dette 500-meterfelt.</span><span>Vælg en nærliggende by for den fulde zoneanalyse.</span></div>`)
+            .openOn(map);
+    });
+
     function renderContextMunicipalityBoundaries(geography) {
         if (state.contextMunicipalityLayer) map.removeLayer(state.contextMunicipalityLayer);
         const features = (geography.municipalities?.features || [])
@@ -476,7 +686,8 @@
                 style: scenario.key === 'primary'
                     ? { color: '#0f766e', weight: 2.2, opacity: 0.95, fillColor: '#2a9d8f', fillOpacity: state.comparing ? 0.14 : 0.18 }
                     : { color: '#6d5bd0', weight: 2.2, opacity: 0.95, fillColor: '#8776e6', fillOpacity: 0.14 },
-            }).addTo(map);
+            });
+            if (!state.heatmap.active) scenario.layer.addTo(map);
         } catch (error) {
             if (requestId === scenario.isochroneRequest) scenario.isochroneError = error.message;
         } finally {
@@ -503,17 +714,28 @@
         const secondary = state.scenarios.secondary;
         const hasPrimary = Boolean(primary.origin);
         const hasSecondary = Boolean(secondary.origin);
-        elements.slider.disabled = !hasPrimary;
-        elements.mapSlider.disabled = !hasPrimary;
+        elements.slider.disabled = !hasPrimary && !state.heatmap.active;
+        elements.mapSlider.disabled = !hasPrimary && !state.heatmap.active;
         elements.compareToggle.disabled = !hasPrimary;
-        elements.selectionPrompt.hidden = hasPrimary;
-        elements.status.hidden = !hasPrimary;
-        elements.singleResults.hidden = !hasPrimary || state.comparing;
-        elements.comparisonPanel.hidden = !hasPrimary || !state.comparing;
-        elements.citiesSection.hidden = !hasPrimary;
+        elements.selectionPrompt.hidden = hasPrimary || state.heatmap.active;
+        elements.status.hidden = !hasPrimary || state.heatmap.active;
+        elements.singleResults.hidden = !hasPrimary || state.comparing || state.heatmap.active;
+        elements.comparisonPanel.hidden = !hasPrimary || !state.comparing || state.heatmap.active;
+        elements.citiesSection.hidden = !hasPrimary || state.heatmap.active;
+        elements.output.value = `${state.minutes} minutter`;
+        elements.output.textContent = `${state.minutes} minutter`;
+        elements.mapOutput.value = `${state.minutes} minutter`;
+        elements.mapOutput.textContent = `${state.minutes} minutter`;
+        updateHeatmapControls();
+        if (state.heatmap.active) {
+            elements.reached.textContent = state.heatmap.ready ? 'Heatmap' : 'Indlæser…';
+            updateMarkers();
+            updateMapLoading();
+            return;
+        }
         if (!hasPrimary) {
             elements.legendPrimary.textContent = 'Vælg udgangspunkt A';
-            elements.reached.textContent = 'Vælg by';
+            elements.reached.textContent = state.heatmap.active ? 'Heatmap' : 'Vælg by';
             updateMarkers();
             updateMapLoading();
             return;
@@ -521,10 +743,6 @@
         const primaryResult = calculateScenario(primary);
         const secondaryResult = state.comparing && hasSecondary ? calculateScenario(secondary) : null;
 
-        elements.output.value = `${state.minutes} minutter`;
-        elements.output.textContent = `${state.minutes} minutter`;
-        elements.mapOutput.value = `${state.minutes} minutter`;
-        elements.mapOutput.textContent = `${state.minutes} minutter`;
         elements.singleOriginName.textContent = `A · ${primary.origin.name}`;
         elements.legendPrimary.textContent = primary.origin.name;
         elements.legendSecondary.textContent = hasSecondary ? secondary.origin.name : 'Vælg B';
@@ -1350,6 +1568,20 @@
     }
 
     function updateMapLoading() {
+        if (state.heatmap.active) {
+            if (state.heatmap.error) {
+                elements.mapLoading.textContent = 'Heatmappet kunne ikke indlæses';
+                elements.mapLoading.classList.remove('is-hidden', 'is-prompt');
+                elements.mapLoading.classList.add('is-error');
+            } else if (state.heatmap.loading || !state.heatmap.ready) {
+                elements.mapLoading.textContent = 'Henter forberegnet heatmap…';
+                elements.mapLoading.classList.remove('is-hidden', 'is-error', 'is-prompt');
+            } else {
+                elements.mapLoading.classList.add('is-hidden');
+                elements.mapLoading.classList.remove('is-error', 'is-prompt');
+            }
+            return;
+        }
         const active = activeScenarios();
         const supportingDataLoading = !state.statsReady || !state.geographyReady;
         const routingLoading = active.some((scenario) => !scenario.routingReady);
@@ -1386,6 +1618,8 @@
         else url.searchParams.delete('origin');
         if (state.comparing && state.scenarios.secondary.originId) url.searchParams.set('compare', state.scenarios.secondary.originId);
         else url.searchParams.delete('compare');
+        if (state.heatmap.active) url.searchParams.set('view', 'heatmap');
+        else url.searchParams.delete('view');
         url.searchParams.set('minutes', String(state.minutes));
         window.history.replaceState({}, '', url);
     }
@@ -1448,6 +1682,20 @@
         return name
             .replace('Industri, råstofindvinding og forsyningsvirksomhed', 'Industri og forsyning')
             .replace('Offentlig administration, undervisning og sundhed', 'Offentlig service, undervisning og sundhed');
+    }
+
+    function heatQuantile(sortedValues, fraction) {
+        if (!sortedValues.length) return 0;
+        const position = clamp(fraction, 0, 1) * (sortedValues.length - 1);
+        const lower = Math.floor(position);
+        const upper = Math.ceil(position);
+        if (lower === upper) return sortedValues[lower];
+        return sortedValues[lower] + (sortedValues[upper] - sortedValues[lower]) * (position - lower);
+    }
+
+    function heatColor(fraction) {
+        const colors = ['#fff0b8', '#f4c46c', '#eb8a4d', '#d65345', '#772d4c'];
+        return colors[Math.min(colors.length - 1, Math.floor(clamp(fraction, 0, 0.9999) * colors.length))];
     }
 
     function clamp(value, min, max) {
