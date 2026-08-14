@@ -137,6 +137,12 @@
         initialize(points, cellKm) {
             this.points = points;
             this.cellKm = Number(cellKm) || 0.5;
+            const latitudes = points.map((point) => Number(point[0])).filter(Number.isFinite);
+            const gridLatitude = latitudes.length > 0
+                ? (Math.min(...latitudes) + Math.max(...latitudes)) / 2
+                : 56.3;
+            this.cellLatStep = this.cellKm / 111.32;
+            this.cellLonStep = this.cellKm / (111.32 * Math.max(0.2, Math.cos(gridLatitude * Math.PI / 180)));
             this.minuteIndex = 0;
             this.low = 0;
             this.high = 1;
@@ -191,17 +197,22 @@
             for (const point of this.points) {
                 const screen = this.map.latLngToContainerPoint([point[0], point[1]]);
                 if (screen.x < -20 || screen.y < -20 || screen.x > size.x + 20 || screen.y > size.y + 20) continue;
-                const east = this.map.latLngToContainerPoint([
-                    point[0],
-                    point[1] + this.cellKm / (111.32 * Math.max(0.2, Math.cos(point[0] * Math.PI / 180))),
+                const northWest = this.map.latLngToContainerPoint([
+                    point[0] + this.cellLatStep / 2,
+                    point[1] - this.cellLonStep / 2,
                 ]);
-                const radius = Math.max(2.4, Math.abs(east.x - screen.x) * 0.72);
+                const southEast = this.map.latLngToContainerPoint([
+                    point[0] - this.cellLatStep / 2,
+                    point[1] + this.cellLonStep / 2,
+                ]);
+                const left = Math.min(northWest.x, southEast.x) - 0.2;
+                const top = Math.min(northWest.y, southEast.y) - 0.2;
+                const width = Math.max(1, Math.abs(southEast.x - northWest.x) + 0.4);
+                const height = Math.max(1, Math.abs(southEast.y - northWest.y) + 0.4);
                 const value = Number(point[2]?.[this.minuteIndex] || 0);
                 const fraction = clamp((value - this.low) / (this.high - this.low), 0, 1);
-                context.beginPath();
-                context.arc(screen.x, screen.y, radius, 0, Math.PI * 2);
                 context.fillStyle = heatColor(fraction);
-                context.fill();
+                context.fillRect(left, top, width, height);
             }
             context.globalAlpha = 1;
         },
