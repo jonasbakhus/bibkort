@@ -7,6 +7,23 @@ $originOptionLabel = static function (array $origin): string {
     $description = trim((string) ($origin['description'] ?? ''));
     return (string) $origin['name'] . ($description === '' ? '' : ' · ' . $description);
 };
+$originSortKey = static function (array $origin): string {
+    $name = (string) ($origin['name'] ?? '');
+    $name = function_exists('mb_strtolower') ? mb_strtolower($name, 'UTF-8') : strtolower($name);
+
+    // Dansk alfabetisk rækkefølge: æ, ø og å følger efter z.
+    return strtr($name, ['æ' => '{a', 'ø' => '{b', 'å' => '{c']);
+};
+$originOptions = $config['origins'];
+uasort($originOptions, static function (array $left, array $right) use ($originSortKey): int {
+    $leftIsBoundary = ($left['type'] ?? '') === 'boundary';
+    $rightIsBoundary = ($right['type'] ?? '') === 'boundary';
+    if ($leftIsBoundary !== $rightIsBoundary) {
+        return $leftIsBoundary ? 1 : -1;
+    }
+
+    return $originSortKey($left) <=> $originSortKey($right);
+});
 $clientConfig = [
     'name' => $config['name'],
     'variant' => $config['variant'],
@@ -106,7 +123,7 @@ header('Pragma: no-cache');
                         <span>Udgangspunkt A</span>
                         <select id="origin-primary" required>
                             <option value="" selected>Vælg en by…</option>
-                            <?php foreach ($config['origins'] as $id => $origin): ?>
+                            <?php foreach ($originOptions as $id => $origin): ?>
                                 <option value="<?= htmlspecialchars($id, ENT_QUOTES, 'UTF-8') ?>"><?= htmlspecialchars($originOptionLabel($origin), ENT_QUOTES, 'UTF-8') ?></option>
                             <?php endforeach; ?>
                         </select>
@@ -117,7 +134,7 @@ header('Pragma: no-cache');
                         <span>Udgangspunkt B</span>
                         <select id="origin-secondary">
                             <option value="" selected>Vælg by B…</option>
-                            <?php foreach ($config['origins'] as $id => $origin): ?>
+                            <?php foreach ($originOptions as $id => $origin): ?>
                                 <option value="<?= htmlspecialchars($id, ENT_QUOTES, 'UTF-8') ?>"><?= htmlspecialchars($originOptionLabel($origin), ENT_QUOTES, 'UTF-8') ?></option>
                             <?php endforeach; ?>
                         </select>
