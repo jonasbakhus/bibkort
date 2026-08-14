@@ -79,6 +79,10 @@
         citiesContext: document.getElementById('cities-context'),
         primarySelect: document.getElementById('origin-primary'),
         secondarySelect: document.getElementById('origin-secondary'),
+        mapPrimarySelect: document.getElementById('map-origin-primary'),
+        mapSecondarySelect: document.getElementById('map-origin-secondary'),
+        mapPrimaryLabel: document.getElementById('map-origin-primary-label'),
+        mapSecondaryField: document.getElementById('map-origin-secondary-field'),
         secondaryControl: document.getElementById('secondary-control'),
         compareToggle: document.getElementById('compare-toggle'),
         singleResults: document.getElementById('single-results'),
@@ -311,14 +315,15 @@
     elements.slider.step = config.slider.step;
     elements.slider.value = state.minutes;
     elements.mapSlider.value = state.minutes;
-    elements.primarySelect.value = state.scenarios.primary.originId || '';
-    elements.secondarySelect.value = state.scenarios.secondary.originId || '';
+    syncOriginSelects();
     applyComparisonMode();
     updateSliderProgress();
     updateUrl();
 
     elements.primarySelect.addEventListener('change', () => selectOrigin('primary', elements.primarySelect.value));
     elements.secondarySelect.addEventListener('change', () => selectOrigin('secondary', elements.secondarySelect.value));
+    elements.mapPrimarySelect.addEventListener('change', () => selectOrigin('primary', elements.mapPrimarySelect.value));
+    elements.mapSecondarySelect.addEventListener('change', () => selectOrigin('secondary', elements.mapSecondarySelect.value));
     elements.mapSizeToggle?.addEventListener('click', toggleMobileMap);
     elements.heatmapToggle?.addEventListener('click', toggleHeatmap);
     elements.mapHeatmapToggle?.addEventListener('click', toggleHeatmap);
@@ -432,7 +437,7 @@
         const scenario = state.scenarios[key];
         if (scenario.originId === originId) return;
         if (key === 'secondary' && state.scenarios.primary.originId === originId) {
-            elements.secondarySelect.value = scenario.originId || '';
+            syncOriginSelects();
             window.alert('Vælg en anden by som udgangspunkt B.');
             return;
         }
@@ -597,6 +602,17 @@
         render();
     }
 
+    function syncOriginSelects() {
+        const primaryId = state.scenarios.primary.originId || '';
+        const secondaryId = state.scenarios.secondary.originId || '';
+        [elements.primarySelect, elements.mapPrimarySelect].forEach((select) => {
+            if (select.value !== primaryId) select.value = primaryId;
+        });
+        [elements.secondarySelect, elements.mapSecondarySelect].forEach((select) => {
+            if (select.value !== secondaryId) select.value = secondaryId;
+        });
+    }
+
     async function toggleHeatmap() {
         state.heatmap.active = !state.heatmap.active;
         updateHeatmapControls();
@@ -736,6 +752,7 @@
         const secondary = state.scenarios.secondary;
         const hasPrimary = Boolean(primary.origin);
         const hasSecondary = Boolean(secondary.origin);
+        syncOriginSelects();
         elements.slider.disabled = !hasPrimary && !state.heatmap.active;
         elements.mapSlider.disabled = !hasPrimary && !state.heatmap.active;
         elements.compareToggle.disabled = !hasPrimary;
@@ -1576,6 +1593,8 @@
         document.body.classList.toggle('is-comparing', state.comparing);
         elements.secondaryControl.hidden = !state.comparing;
         elements.legendSecondaryWrap.hidden = !state.comparing;
+        elements.mapSecondaryField.hidden = !state.comparing;
+        elements.mapPrimaryLabel.textContent = state.comparing ? 'Udgangspunkt A' : 'Valgt by';
         elements.singleResults.hidden = state.comparing || !state.scenarios.primary.origin;
         elements.comparisonPanel.hidden = !state.comparing || !state.scenarios.primary.origin;
         elements.compareToggle.setAttribute('aria-pressed', String(state.comparing));

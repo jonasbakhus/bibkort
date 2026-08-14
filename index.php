@@ -101,6 +101,26 @@ header('Pragma: no-cache');
                 <input id="map-time-slider" type="range" min="<?= (int) $config['slider']['min'] ?>" max="<?= (int) $config['slider']['max'] ?>" step="<?= (int) $config['slider']['step'] ?>" value="<?= (int) $config['slider']['default'] ?>" aria-label="Maksimal køretid i minutter på kortet" disabled>
                 <div class="range-labels" aria-hidden="true"><span><?= (int) $config['slider']['min'] ?> min</span><span><?= (int) $config['slider']['max'] ?> min</span></div>
             </section>
+            <section class="map-expanded-origin-control" aria-label="Udgangspunkt på det udvidede kort">
+                <label for="map-origin-primary">
+                    <span id="map-origin-primary-label">Valgt by</span>
+                    <select id="map-origin-primary">
+                        <option value="" selected>Ingen valgt</option>
+                        <?php foreach ($originOptions as $id => $origin): ?>
+                            <option value="<?= htmlspecialchars($id, ENT_QUOTES, 'UTF-8') ?>"><?= htmlspecialchars($originOptionLabel($origin), ENT_QUOTES, 'UTF-8') ?></option>
+                        <?php endforeach; ?>
+                    </select>
+                </label>
+                <label id="map-origin-secondary-field" for="map-origin-secondary" hidden>
+                    <span>Udgangspunkt B</span>
+                    <select id="map-origin-secondary">
+                        <option value="" selected>Ingen valgt</option>
+                        <?php foreach ($originOptions as $id => $origin): ?>
+                            <option value="<?= htmlspecialchars($id, ENT_QUOTES, 'UTF-8') ?>"><?= htmlspecialchars($originOptionLabel($origin), ENT_QUOTES, 'UTF-8') ?></option>
+                        <?php endforeach; ?>
+                    </select>
+                </label>
+            </section>
             <div class="map-legends">
                 <div class="map-legend" aria-hidden="true">
                     <span><i class="legend-dot origin-dot"></i><span id="legend-primary">Vælg udgangspunkt A</span></span>
