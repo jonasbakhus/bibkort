@@ -429,13 +429,22 @@ body.is-map-expanded .map-expanded-time-control .range-labels { margin-top: -2px
 .sources a:hover { color: var(--accent); }
 .publisher { padding-left: 10px; border-left: 3px solid var(--brand); }
 
-.map-legend {
+.map-legends {
     position: absolute;
     z-index: 500;
     left: 18px;
+    right: 18px;
     bottom: 28px;
     display: flex;
+    flex-direction: column-reverse;
+    align-items: flex-start;
+    gap: 8px;
+    pointer-events: none;
+}
+.map-legend {
+    display: flex;
     flex-wrap: wrap;
+    max-width: 100%;
     gap: 10px 15px;
     padding: 10px 13px;
     border: 1px solid rgb(255 255 255 / 75%);
@@ -456,12 +465,8 @@ body.is-map-expanded .map-expanded-time-control .range-labels { margin-top: -2px
 .context-municipality-line { border-top-width: 2px; border-top-color: #526d7a; }
 
 .heatmap-legend {
-    position: absolute;
-    z-index: 500;
-    left: 18px;
-    bottom: 86px;
     display: grid;
-    width: min(260px, calc(100% - 36px));
+    width: min(260px, 100%);
     gap: 5px;
     padding: 10px 12px;
     border: 1px solid rgb(255 255 255 / 78%);
@@ -603,8 +608,7 @@ noscript { display: block; padding: 20px; background: #fff3cd; }
     .info-panel { order: 2; overflow: visible; padding: 26px 20px 30px; border: 0; box-shadow: none; }
     .hero { padding-bottom: 20px; }
     h1 { font-size: 2rem; }
-    .map-legend { left: 10px; bottom: 22px; }
-    .heatmap-legend { left: 10px; bottom: 86px; }
+    .map-legends { left: 10px; right: 10px; bottom: 22px; }
     .map-loading { left: 10px; }
 }
 
@@ -618,8 +622,8 @@ noscript { display: block; padding: 20px; background: #fff3cd; }
     .control-heading { align-items: center; }
     #time-output { font-size: 1.45rem; }
     .reach-pill { max-width: 105px; text-align: center; }
-    .map-legend { right: 10px; gap: 7px 12px; }
-    .heatmap-legend { right: 10px; width: auto; }
+    .map-legend { width: 100%; gap: 7px 12px; }
+    .heatmap-legend { width: 100%; }
     .map-mobile-controls { max-width: calc(100vw - 20px); flex-wrap: wrap; }
     .origin-control-heading { align-items: center; }
     .comparison-results { grid-template-columns: 1fr; }

@@ -101,19 +101,21 @@ header('Pragma: no-cache');
                 <input id="map-time-slider" type="range" min="<?= (int) $config['slider']['min'] ?>" max="<?= (int) $config['slider']['max'] ?>" step="<?= (int) $config['slider']['step'] ?>" value="<?= (int) $config['slider']['default'] ?>" aria-label="Maksimal køretid i minutter på kortet" disabled>
                 <div class="range-labels" aria-hidden="true"><span><?= (int) $config['slider']['min'] ?> min</span><span><?= (int) $config['slider']['max'] ?> min</span></div>
             </section>
-            <div class="map-legend" aria-hidden="true">
-                <span><i class="legend-dot origin-dot"></i><span id="legend-primary">Vælg udgangspunkt A</span></span>
-                <span id="legend-secondary-wrap" hidden><i class="legend-dot secondary-dot"></i><span id="legend-secondary">Vælg B</span></span>
-                <span><i class="legend-dot reached-dot"></i>Nået by</span>
-                <span><i class="legend-dot near-dot"></i>Nær grænsen</span>
-                <span><i class="legend-dot boundary-point-dot"></i>Kommunegrænsepunkt</span>
-                <span><i class="legend-line municipality-line"></i>Lemvig Kommune</span>
-                <span><i class="legend-line context-municipality-line"></i>Andre kommuner</span>
-            </div>
-            <div id="heatmap-legend" class="heatmap-legend" aria-hidden="true" hidden>
-                <strong>Anslåede job inden for køretiden</strong>
-                <span class="heatmap-gradient"></span>
-                <span class="heatmap-scale"><i id="heatmap-min">Lavere</i><i id="heatmap-max">Højere</i></span>
+            <div class="map-legends">
+                <div class="map-legend" aria-hidden="true">
+                    <span><i class="legend-dot origin-dot"></i><span id="legend-primary">Vælg udgangspunkt A</span></span>
+                    <span id="legend-secondary-wrap" hidden><i class="legend-dot secondary-dot"></i><span id="legend-secondary">Vælg B</span></span>
+                    <span><i class="legend-dot reached-dot"></i>Nået by</span>
+                    <span><i class="legend-dot near-dot"></i>Nær grænsen</span>
+                    <span><i class="legend-dot boundary-point-dot"></i>Kommunegrænsepunkt</span>
+                    <span><i class="legend-line municipality-line"></i>Lemvig Kommune</span>
+                    <span><i class="legend-line context-municipality-line"></i>Andre kommuner</span>
+                </div>
+                <div id="heatmap-legend" class="heatmap-legend" aria-hidden="true" hidden>
+                    <strong>Anslåede job inden for køretiden</strong>
+                    <span class="heatmap-gradient"></span>
+                    <span class="heatmap-scale"><i id="heatmap-min">Lavere</i><i id="heatmap-max">Højere</i></span>
+                </div>
             </div>
             <div id="map-loading" class="map-loading is-prompt" role="status">Vælg en by for at starte</div>
         </section>
