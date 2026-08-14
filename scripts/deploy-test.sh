@@ -61,7 +61,7 @@ curl -fsS --max-time 30 'https://testbibkort.landogbyforeningen.dk/api/geography
 grep -Fq '"ok":true' "$geography_response"
 grep -Fq '"urban":0.9' "$geography_response"
 page_response="$(curl -fsS --max-time 30 'https://testbibkort.landogbyforeningen.dk/')"
-[[ "$page_response" == *'<h1>Arbejdsmarkedskort</h1>'* ]]
+[[ "$page_response" == *'<h1>Joboplandskort for Lemvig Kommune</h1>'* ]]
 
 state_tmp="${state_file}.tmp"
 printf '%s\n' "$remote_commit" > "$state_tmp"
