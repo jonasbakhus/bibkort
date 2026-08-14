@@ -1,0 +1,12 @@
+Options -Indexes
+DirectoryIndex index.php
+
+AuthType Basic
+AuthName "Google testkort"
+AuthUserFile /var/www/landogbyforeningen.dk/.testbibg-htpasswd
+Require valid-user
+
+<IfModule mod_headers.c>
+    Header always set X-Robots-Tag "noindex, nofollow, noarchive, nosnippet, noimageindex"
+    Header always set Cache-Control "private, no-store"
+</IfModule>

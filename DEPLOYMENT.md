@@ -5,6 +5,7 @@ Projektet bruger to permanente grene og to subdomæner:
 | Gren | Miljø | Webrod |
 | --- | --- | --- |
 | `develop` | `testbibkort.landogbyforeningen.dk` | `~/testbibkort` |
+| `google` | `testbibg.landogbyforeningen.dk` | `~/testbibg` |
 | `main` | `bibkort.landogbyforeningen.dk` | `~/bibkort` |
 
 ## Dagligt arbejde
@@ -14,7 +15,49 @@ Projektet bruger to permanente grene og to subdomæner:
 3. Når versionen er godkendt, merges `develop` til `main`.
 4. `main` publiceres på produktionssubdomænet og får et versions-tag.
 
-Testmiljøet får automatisk `noindex`, når værtsnavnet begynder med `testbibkort.`.
+Begge testmiljøer får automatisk `noindex`.
+
+## Google-testmiljø
+
+`scripts/deploy-google-test.sh` udgiver `google`-grenen til `~/testbibg`. Miljøets egen `config/secrets.php` skal indeholde:
+
+```php
+'variant' => 'google',
+'google_isochrones_api_key' => 'SERVER_SIDE_API_NØGLE',
+```
+
+Nøglen må kun have adgang til Google Maps Platform Isochrones API. Sæt en lav dagskvote og en budgetalarm i Google Cloud. Nøglen bruges kun fra PHP på serveren og sendes aldrig til browseren eller GitHub.
+
+Google-testens `.htaccess` kræver HTTP Basic Auth og sender `X-Robots-Tag: noindex`; dens `robots.txt` afviser desuden alle robotter. Adgangs- og health check-oplysninger ligger uden for webroden i `~/.testbibg-htpasswd` og `~/.testbibg-health-auth`.
+
+Cronjobbet er:
+
+```cron
+* * * * * /usr/bin/flock -n $HOME/.bibkort-google-test-deploy.lock $HOME/testbibg/scripts/deploy-google-test.sh >> $HOME/.bibkort-google-test-deploy.log 2>&1
+```
+
+Fælles rettelser udvikles på `develop` og føres over, når Google-udgaven skal opdateres:
+
+```bash
+git switch google
+git merge develop
+git push origin google
+git switch develop
+```
+
+Google-specifikke ændringer committes direkte på `google` og påvirker dermed ikke `develop` eller `main`.
+
+## Automatisk deploy til test
+
+Simply kører `scripts/deploy-test.sh` hvert minut via cron. Scriptet sammenligner den publicerede version med seneste commit på `develop` og gør ingenting, hvis de er ens. Ved et nyt commit hentes præcis den version fra GitHub, alle PHP-filer syntakstestes, og filerne synkroniseres til `~/testbibkort`.
+
+Cronjobbet på Simply er:
+
+```cron
+* * * * * /usr/bin/flock -n $HOME/.bibkort-test-deploy.lock $HOME/testbibkort/scripts/deploy-test.sh >> $HOME/.bibkort-test-deploy.log 2>&1
+```
+
+`config/secrets.php` og genererede cachefiler bevares på serveren. Versionsmarkøren skrives først, når testsidens forside svarer korrekt, og routing-API'et oplyser TravelTime som provider. Ved fejl prøver cronjobbet igen næste minut; detaljer står i `~/.bibkort-test-deploy.log`.
 
 ## Publicér en gren via SSH
 
@@ -27,6 +70,18 @@ curl -fsSL "https://github.com/jonasbakhus/bibkort/archive/refs/heads/BRANCH.tar
 cp -a "$deploy_tmp/bibkort-BRANCH/." "MAPPE/"
 chmod 775 "MAPPE/cache"
 ```
+
+## TravelTime-oplysninger på hvert miljø
+
+Opret `config/secrets.php` separat i både `~/testbibkort` og `~/bibkort`. Brug strukturen fra `config/secrets.example.php`, og indsæt miljøets Application ID og Application Key. Filen er ignoreret af Git og må ikke committes.
+
+Udrulningskommandoen ovenfor sletter ikke filen, så den skal kun oprettes første gang. Kontrollér bagefter:
+
+```text
+https://testbibkort.landogbyforeningen.dk/api/routing.php?action=matrix&origin=lemvig
+```
+
+Svaret skal indeholde `"provider":"TravelTime"`.
 
 ## Godkend testversionen
 

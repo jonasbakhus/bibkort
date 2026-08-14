@@ -5,6 +5,7 @@
 
 # Lokale indstillinger og værktøjer
 .env
+config/secrets.php
 .DS_Store
 Thumbs.db
 .idea/

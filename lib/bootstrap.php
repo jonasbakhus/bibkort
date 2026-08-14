@@ -11,6 +11,7 @@ function app_json_response(array $payload, int $status = 200): void
     header('Content-Type: application/json; charset=utf-8');
     header('X-Content-Type-Options: nosniff');
     header('Cache-Control: no-store');
+    header('Vary: Accept-Encoding');
 
     $json = json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
     if ($json === false) {
@@ -19,6 +20,18 @@ function app_json_response(array $payload, int $status = 200): void
         exit;
     }
 
+    $acceptEncoding = (string) ($_SERVER['HTTP_ACCEPT_ENCODING'] ?? '');
+    if (str_contains($acceptEncoding, 'gzip') && function_exists('gzencode')) {
+        $compressed = gzencode($json, 6);
+        if (is_string($compressed)) {
+            header('Content-Encoding: gzip');
+            header('Content-Length: ' . strlen($compressed));
+            echo $compressed;
+            exit;
+        }
+    }
+
+    header('Content-Length: ' . strlen($json));
     echo $json;
     exit;
 }
@@ -70,6 +83,82 @@ function app_http_get(string $url, int $timeout = 30): string
             'timeout' => $timeout,
             'ignore_errors' => true,
             'header' => "User-Agent: {$userAgent}\r\nAccept: application/json, text/csv;q=0.9, */*;q=0.8\r\n",
+        ],
+    ]);
+    $body = @file_get_contents($url, false, $context);
+    $status = 0;
+    foreach ($http_response_header ?? [] as $header) {
+        if (preg_match('/^HTTP\/\S+\s+(\d{3})/', $header, $matches) === 1) {
+            $status = (int) $matches[1];
+        }
+    }
+
+    if (!is_string($body) || $status < 200 || $status >= 300) {
+        throw new RuntimeException(sprintf('Ekstern tjeneste svarede med HTTP %d.', $status));
+    }
+
+    return $body;
+}
+
+function app_http_post_json(string $url, array $payload, array $headers = [], int $timeout = 45): string
+{
+    $json = json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    if ($json === false) {
+        throw new RuntimeException('HTTP-forespørgslen kunne ikke kodes som JSON.');
+    }
+
+    $userAgent = 'bibkort/1.0 (+https://github.com/jonasbakhus/bibkort)';
+    $requestHeaders = array_merge(['Content-Type: application/json'], $headers);
+    $hasAcceptHeader = false;
+    foreach ($requestHeaders as $header) {
+        if (stripos($header, 'Accept:') === 0) {
+            $hasAcceptHeader = true;
+            break;
+        }
+    }
+    if (!$hasAcceptHeader) {
+        $requestHeaders[] = 'Accept: application/json';
+    }
+
+    if (function_exists('curl_init')) {
+        $handle = curl_init($url);
+        if ($handle === false) {
+            throw new RuntimeException('HTTP-klienten kunne ikke startes.');
+        }
+
+        curl_setopt_array($handle, [
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_FOLLOWLOCATION => true,
+            CURLOPT_MAXREDIRS => 3,
+            CURLOPT_CONNECTTIMEOUT => 8,
+            CURLOPT_TIMEOUT => $timeout,
+            CURLOPT_USERAGENT => $userAgent,
+            CURLOPT_POST => true,
+            CURLOPT_POSTFIELDS => $json,
+            CURLOPT_HTTPHEADER => $requestHeaders,
+            CURLOPT_ENCODING => '',
+        ]);
+
+        $body = curl_exec($handle);
+        $status = (int) curl_getinfo($handle, CURLINFO_RESPONSE_CODE);
+        $error = curl_error($handle);
+        curl_close($handle);
+
+        if (!is_string($body) || $status < 200 || $status >= 300) {
+            throw new RuntimeException(sprintf('Ekstern tjeneste svarede med HTTP %d%s.', $status, $error !== '' ? ': ' . $error : ''));
+        }
+
+        return $body;
+    }
+
+    $headerText = "User-Agent: {$userAgent}\r\n" . implode("\r\n", $requestHeaders) . "\r\n";
+    $context = stream_context_create([
+        'http' => [
+            'method' => 'POST',
+            'timeout' => $timeout,
+            'ignore_errors' => true,
+            'header' => $headerText,
+            'content' => $json,
         ],
     ]);
     $body = @file_get_contents($url, false, $context);

@@ -1,18 +1,24 @@
-# Arbejdsmarkedskort for hele Lemvig Kommune
-Et neutralt arbejdsmarkedsværktøj for hele Lemvig Kommune, der viser og sammenligner realistiske køretidszoner og modelberegnede joboplande.
+# Joboplandskort for Lemvig Kommune
+Et arbejdsmarkedsværktøj for hele Lemvig Kommune, der viser og sammenligner realistiske køretidszoner og modelberegnede joboplande.
 
 Appen er bygget til et almindeligt PHP-webhotel og kræver ingen database, Composer, Node.js eller buildkommando. Alle URL'er er relative, så den kan køre fra eksempelvis `https://bibkort.landogbyforeningen.dk/`.
 
 ## Funktioner
 
 - 15–90 minutters køretidsområde i trin på 5 minutter
-- vælg mellem byer og lokalsamfund i hele Lemvig Kommune uden et favoriseret standardudgangspunkt
-- delbare sammenligninger via URL-parameteren `origin`
-- Valhalla-isochroner baseret på OpenStreetMaps vejnet, ikke simple cirkler
+- 26 byer og lokalsamfund i Lemvig Kommune samt fem punkter ved kommunegrænsen kan vælges som udgangspunkt
+- delbare valg via URL-parametrene `origin`, `compare` og `minutes`
+- to udgangspunkter kan sammenlignes med hver sin zone, nøgletal og branchegraf
+- TravelTime-isochroner baseret på vejnettet, ikke simple cirkler; Valhalla bruges som lokal fallback uden nøgler
+- byernes start- og slutpunkter er fastlagt ensartet og dokumenteret, så ingen by favoriseres i modellen
+- TravelTime er kalibreret pr. udgangspunkt mod en bred Google Routes-matrix med 621 ruter og cirka 22–23 kontrolruter pr. sted
 - faktiske køretider og vejafstande til 14 arbejdsmarkedsbyer
 - servercache af både isochroner, køretidsmatrix og Statistikbank-data
 - seneste tilgængelige ERHV2-år findes automatisk
-- job, arbejdssteder og branchefordeling for nåede kommuner uden dobbeltoptælling
+- geografisk 90/10-model for job, arbejdssteder og brancher inde i selve zonen
+- officielle BY3-befolkningstal for byfordeling og kommunegrænser fra Dataforsyningen til landzoneoverlap
+- dynamisk rutematrix for officielle BY3-byer til og med den valgte tid plus 5 minutter; ved 90 minutter dækkes nærzonen derfor til 95 minutter
+- synlig kilde-, årgangs- og formelforklaring for hver byandel i resultatlisterne
 - responsivt kort- og informationslayout
 - tydelig metodeforklaring om forskellen på køretidspolygon og kommunetal
 
@@ -24,9 +30,14 @@ assets/css/app.css             Responsivt visuelt design
 assets/js/app.js               Kort, slider og dynamiske beregninger
 api/routing.php                Normaliseret routing-API med cache
 api/statbank.php               ERHV2-proxy, årvalg og normalisering
+api/geography.php              BY3-byområder og kommunegrænser med cache
 config/app.php                 Udgangspunkt, byer, kommuner og providers
 lib/bootstrap.php              HTTP-, cache- og JSON-hjælpere
+lib/Geography.php              Samler BY3 og Dataforsyningens geometri
+lib/Routing/TravelTimeProvider.php TravelTime-provider til flade og matrix
+lib/Routing/GoogleRoutesMatrixClient.php Google-kontrolmatrix til manuel genkalibrering
 lib/Routing/ValhallaProvider.php  Isoleret routing-provider
+config/routing-calibration.php    Versionsstyrede kalibreringskurver
 cache/                         Genererede cachefiler (ignoreres af Git)
 ```
 
@@ -34,12 +45,14 @@ cache/                         Genererede cachefiler (ignoreres af Git)
 
 - PHP 8.0 eller nyere
 - PHP-udvidelsen cURL **eller** `allow_url_fopen=On`
-- udgående HTTPS-adgang til Statistikbanken og Valhalla
+- udgående HTTPS-adgang til Statistikbanken, Dataforsyningen og TravelTime
 - JavaScript i browseren
 - internetadgang til Leaflet-CDN og OpenStreetMap-kortfliser
 - skriveadgang for PHP til mappen `cache/`
 
-Der bruges ingen API-nøgler eller secrets. Routing-serveren kan skiftes med miljøvariablen `BIBKORT_VALHALLA_URL`; den skal pege på en kompatibel Valhalla-instans.
+TravelTime-oplysninger læses fra miljøvariablerne `BIBKORT_TRAVELTIME_APP_ID` og `BIBKORT_TRAVELTIME_API_KEY` eller fra den Git-ignorerede fil `config/secrets.php`. Kopiér `config/secrets.example.php` som udgangspunkt. Hvis oplysningerne ikke findes, bruger appen Valhalla. Provider kan desuden vælges eksplicit med `BIBKORT_ROUTING_PROVIDER`.
+
+Google Routes bruges kun som kontrolgrundlag ved en bevidst genkalibrering. Den versionerede kontrolmatrix omfatter 27 udgangspunkter og 23 kontrolbyer, i alt 621 ruter, med én lineær tidskurve pr. udgangspunkt. Eventuelle lokale kontrolankre flytter hele kurven for det pågældende udgangspunkt og er ikke særregler for enkelte destinationer. De fem kommunegrænsepunkter bruger foreløbig samme lokale kurve som det oprindelige grænsepunkt indtil næste brede genkalibrering. API-nøglen bliver på serveren; Google kaldes ikke ved almindelige besøg. Kør `php scripts/calibrate-routing.php > cache/google-routes-calibration.json`, gennemgå valideringen, og versionsstyr derefter de godkendte koefficienter i `config/routing-calibration.php`.
 
 ## Lokal udvikling
 
@@ -57,7 +70,11 @@ Syntaxkontrol:
 php -l index.php
 php -l api/routing.php
 php -l api/statbank.php
+php -l api/geography.php
 php -l lib/bootstrap.php
+php -l lib/Geography.php
+php -l lib/Routing/TravelTimeProvider.php
+php -l lib/Routing/GoogleRoutesMatrixClient.php
 php -l lib/Routing/ValhallaProvider.php
 ```
 
@@ -66,9 +83,10 @@ php -l lib/Routing/ValhallaProvider.php
 Med den lokale server på port 8080:
 
 - hovedside: <http://localhost:8080/>
-- køretidsmatrix: <http://localhost:8080/api/routing.php?action=matrix&origin=lemvig>
+- køretidsmatrix med alle relevante BY3-referencebyer: <http://localhost:8080/api/routing.php?action=matrix&scope=settlements&origin=lemvig>
 - 45-minutters isochrone: <http://localhost:8080/api/routing.php?action=isochrone&minutes=45&origin=thyboroen>
 - seneste ERHV2-tal: <http://localhost:8080/api/statbank.php>
+- byområder og kommunegrænser: <http://localhost:8080/api/geography.php>
 
 Et gyldigt API-svar har `"ok": true`. Routing-svar oplyser provider og cachestatus; Statistikbank-svaret oplyser tabel og år.
 
@@ -76,27 +94,34 @@ Et gyldigt API-svar har `"ok": true`. Routing-svar oplyser provider og cachestat
 
 1. Klon eller importer repository til webroden for `bibkort.landogbyforeningen.dk`.
 2. Vælg PHP 8.0 eller nyere i Simply-kontrolpanelet.
-3. Kontrollér, at webserverens PHP-bruger kan skrive i `cache/`.
-4. Åbn `/api/statbank.php` og `/api/routing.php?action=matrix&origin=lemvig` for at varme og kontrollere cachen.
-5. Åbn subdomænets forside.
+3. Opret `config/secrets.php` ud fra `config/secrets.example.php`, og indsæt TravelTime Application ID og Application Key. Filen bliver liggende ved senere Git-udrulninger.
+4. Kontrollér, at webserverens PHP-bruger kan skrive i `cache/`.
+5. Åbn `/api/statbank.php`, `/api/geography.php` og `/api/routing.php?action=matrix&scope=settlements&origin=lemvig` for at varme og kontrollere cachen. Routing-svaret skal vise `"provider":"TravelTime"`.
+6. Åbn subdomænets forside.
 
 Der skal ikke køres Composer, npm eller andre buildtrin på serveren. `cache/.htaccess` forhindrer direkte webadgang til cachefiler på Apache-kompatible webhoteller.
 
 ## Datakilder
 
 - [Danmarks Statistik, ERHV2](https://www.statbank.dk/ERHV2): arbejdssteder og job efter kommune, branche og enhed
-- [Valhalla](https://valhalla.github.io/valhalla/): isochroner og køretidsmatrix
+- [Danmarks Statistik, BY3](https://www.statbank.dk/BY3): befolkning i officielle byområder
+- [CVR / Erhvervsstyrelsen](https://erhvervsstyrelsen.dk/det-centrale-virksomhedsregister-cvr): produktionsenheder med adresser og beskæftigelsesintervaller; endnu ikke aktivt korrektionsgrundlag
+- [Dataforsyningen](https://dataforsyningen.dk/): bymidter og kommunegrænser
+- [TravelTime](https://traveltime.com/): isochroner og køretidsmatrix
+- [Valhalla](https://valhalla.github.io/valhalla/): fallback til lokal udvikling uden TravelTime-oplysninger
 - [OpenStreetMap](https://www.openstreetmap.org/copyright): vejnet og kortgrundlag
 - [Leaflet](https://leafletjs.com/): kortvisning i browseren
 
 ## Metode og kendte begrænsninger
 
-Isochronen er en modelberegning på vejnettet. Resultatet afhænger af routingproviderens kortdata og kørselsmodel og er ikke en garanti for en bestemt rejsetid. Første version bruger ikke afgangstid eller live trafik.
+Isochronen er en modelberegning på vejnettet. Resultatet afhænger af routingproviderens kortdata og kørselsmodel og er ikke en garanti for en bestemt rejsetid. TravelTime-beregningen bruger en typisk hverdagsmorgen, ikke live trafik. Standardmodellens tidskurver er kalibreret mod Google Routes uden trafik for 602 gyldige ruter. Samme kurve anvendes på både bymatricen og hele isochronen for hvert udgangspunkt; der findes ingen særregler for enkelte destinationer. Den gennemsnitlige absolutte afvigelse i kontrolgrundlaget er cirka 2,1 minutter.
 
-ERHV2 indeholder kommuneoplysninger, ikke præcise by- eller polygondata. En kommunes job og arbejdssteder medregnes, når mindst én af de viste byer i kommunen kan nås inden for sliderens tid. Det omfatter også arbejdssteder i landzoner, men de kan ligge uden for selve køretidspolygonen. Derfor beskrives resultatet som **job i nåede kommuner** – ikke som job inden for selve køretidspolygonen. En kommune tælles højst én gang.
+ERHV2 offentliggør præcise totaler på kommuneniveau, men ikke jobtal pr. adresse. Modellen fordeler derfor 90 % af hver kommunes tal på alle officielle BY3-byområder med vægten `befolkning^1,10 × evidensfaktor`. Evidensfaktoren er aktuelt `1,00` for alle byer. Den kan kun ændres, når en ensartet, reproducerbar kilde dokumenterer en afvigende erhvervstæthed; kilde, årgang og faktor skal da fremgå i brugerfladen. Der findes dermed ingen håndvalgte byfordele. Den viste byliste dokumenterer ERHV2-år, BY3-år og standardformel for hver by. En byandel medregnes, når den viste, afrundede rutetid er højst den valgte tid. Rutematricen omfatter desuden officielle BY3-byer indtil fem minutter over valget, så “nær zonen” fungerer ved hele intervallet – også 95 minutter ved et valg på 90. Disse ekstra referencebyer bliver ikke automatisk valgbare udgangspunkter. De resterende 10 % fordeles proportionalt efter zonens arealoverlap med kommunen. Kommunelisten viser hver nået by, øvrige job i den overlappede del og grå job uden for zonen. Hvis alle registrerede bypunkter i en kommune nås, mindst 95 % af kommunearealet overlapper zonen, og den beregnede rest af 10 %-puljen er under 100 job, medregnes den lille restpulje i zonen. Reglen modvirker, at kyst-, klit-, vådområde- og vejnetshuller skaber få teoretiske job udenfor; det rå geografiske overlap vises fortsat. Heltallene fordeles med største-rest-metoden, så delene summerer til den viste kommunetotal og kommunernes zonetal summerer til det viste samlede zonetal. Brancher og arbejdssteder anvender samme geografiske faktor. Tallene i zonen er derfor **anslåede**, mens kommunetotalerne fortsat stemmer med ERHV2.
+
+CVR's produktionsenheder har adresser, men beskæftigelsen offentliggøres som intervaller frem for et præcist jobtal pr. adresse. Et eventuelt fremtidigt CVR-udtræk kræver separat API-adgang og skal behandles ens for alle relevante byer. Danmarks Statistiks mere detaljerede arbejdssteds- og kvadratnetdata kræver særskilt adgang eller levering. Hvis sådanne data anskaffes senere, kan evidensfaktorerne eller hele 90/10-modellen forbedres uden at ændre kortets routingdel.
 
 Se [DEPLOYMENT.md](DEPLOYMENT.md) for branch-, test- og produktionsflow.
 
-Den offentlige Valhalla-instans er en ekstern fællestjeneste uden oppetidsgaranti. Servercachen mindsker belastningen og kan levere senest gemte svar ved midlertidige udfald. Til en senere højtrafikversion bør en driftet routinginstans med aftalt kapacitet overvejes.
+Servercachen mindsker belastningen på routingtjenesten og kan levere senest gemte svar ved midlertidige udfald. TravelTime-kontoens kvote og vilkår skal passe til den faktiske trafik.
 
 Bylisten og kommune­koblingen vedligeholdes samlet i `config/app.php`. Det er næste naturlige sted at udvide geografi og analysegrundlag.
