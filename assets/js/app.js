@@ -274,6 +274,8 @@
             analysisStatus: 'idle',
             analysis: null,
             analysisError: null,
+            analysisWorker: null,
+            analysisWorkerReject: null,
         };
     }
 
@@ -576,6 +578,8 @@
         let workplaces = 0;
         let hasJobs = false;
         let hasWorkplaces = false;
+        const ruralGeographyByCode = await calculateScenarioCoverage(scenario, requestId);
+        if (requestId !== scenario.analysisRequest || !ruralGeographyByCode) return null;
 
         const municipalityEntries = Object.entries(state.municipalities);
         for (let index = 0; index < municipalityEntries.length; index += 1) {
@@ -586,7 +590,7 @@
             const coveredSettlements = settlements.filter((settlement) => settlementReached(scenario, settlement));
             const coveredUrbanWeight = coveredSettlements.reduce((sum, settlement) => sum + settlementUrbanWeight(settlement), 0);
             const urbanCoverage = totalUrbanWeight > 0 ? coveredUrbanWeight / totalUrbanWeight : 0;
-            const ruralGeography = polygonCoverageMetrics(state.municipalityBoundaries.get(code), scenario.geojson);
+            const ruralGeography = ruralGeographyByCode[code] || { fraction: 0, overlapAreaM2: 0, municipalityAreaM2: 0 };
             const ruralCoverage = ruralGeography.fraction;
             const uncoveredRuralJobs = Number.isFinite(municipality.jobs)
                 ? municipality.jobs * state.geography.weights.rural * (1 - ruralCoverage)
@@ -700,6 +704,55 @@
         };
     }
 
+    function calculateScenarioCoverage(scenario, requestId) {
+        if (!config.analysisWorker || typeof Worker === 'undefined') {
+            return calculateScenarioCoverageOnMainThread(scenario, requestId);
+        }
+
+        const boundaries = [...state.municipalityBoundaries.entries()]
+            .map(([code, boundary]) => ({ code, boundary }));
+        const worker = new Worker(config.analysisWorker);
+        scenario.analysisWorker = worker;
+
+        return new Promise((resolve, reject) => {
+            const cleanup = () => {
+                worker.terminate();
+                if (scenario.analysisWorker === worker) scenario.analysisWorker = null;
+                if (scenario.analysisWorkerReject === reject) scenario.analysisWorkerReject = null;
+            };
+            scenario.analysisWorkerReject = reject;
+            worker.addEventListener('message', ({ data }) => {
+                cleanup();
+                if (requestId !== scenario.analysisRequest) {
+                    resolve(null);
+                    return;
+                }
+                if (!data?.ok) {
+                    reject(new Error(data?.error || 'Geografiberegningen fejlede.'));
+                    return;
+                }
+                resolve(data.coverage || {});
+            }, { once: true });
+            worker.addEventListener('error', () => {
+                cleanup();
+                reject(new Error('Geografiberegningen kunne ikke startes.'));
+            }, { once: true });
+            worker.postMessage({ boundaries, geojson: scenario.geojson });
+        });
+    }
+
+    async function calculateScenarioCoverageOnMainThread(scenario, requestId) {
+        const coverage = {};
+        const entries = [...state.municipalityBoundaries.entries()];
+        for (let index = 0; index < entries.length; index += 1) {
+            if (requestId !== scenario.analysisRequest) return null;
+            const [code, boundary] = entries[index];
+            coverage[code] = polygonCoverageMetrics(boundary, scenario.geojson);
+            await yieldToBrowser();
+        }
+        return coverage;
+    }
+
     function indexGeography(geography) {
         state.settlementsByMunicipality = new Map();
         (geography.settlements || []).forEach((settlement) => {
@@ -719,6 +772,10 @@
 
     function invalidateAnalysis(scenario) {
         scenario.analysisRequest += 1;
+        if (scenario.analysisWorker) scenario.analysisWorker.terminate();
+        scenario.analysisWorker = null;
+        if (scenario.analysisWorkerReject) scenario.analysisWorkerReject(new Error('Beregningen blev afbrudt.'));
+        scenario.analysisWorkerReject = null;
         scenario.analysisStatus = 'idle';
         scenario.analysis = null;
         scenario.analysisError = null;

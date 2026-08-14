@@ -44,12 +44,14 @@ $clientConfig = [
 $assetFiles = [
     __DIR__ . '/assets/css/app.css',
     __DIR__ . '/assets/js/app.js',
+    __DIR__ . '/assets/js/analysis-worker.js',
     __DIR__ . '/assets/brand/land-og-by-logo.svg',
 ];
 $assetVersion = substr(hash('sha256', implode('|', array_map(
     static fn (string $file): string => (string) hash_file('sha256', $file),
     $assetFiles
 ))), 0, 12);
+$clientConfig['analysisWorker'] = 'assets/js/analysis-worker.js?v=' . $assetVersion;
 $host = strtolower((string) ($_SERVER['HTTP_HOST'] ?? ''));
 $isStaging = str_starts_with($host, 'testbibkort.') || str_starts_with($host, 'testbibg.');
 $isGoogle = $config['variant'] === 'google';
