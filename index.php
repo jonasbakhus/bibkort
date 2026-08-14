@@ -95,6 +95,9 @@ header('Pragma: no-cache');
                 <button id="map-heatmap-toggle" class="map-heatmap-toggle" type="button" aria-pressed="false">
                     <span class="heatmap-icon" aria-hidden="true"></span><span>Heatmap</span>
                 </button>
+                <button id="map-share-button" class="map-share-button" type="button" aria-label="Del den aktuelle kortvisning">
+                    <span class="share-icon" aria-hidden="true"></span><span>Del</span>
+                </button>
             </div>
             <section class="map-expanded-time-control" aria-label="Køretid på det udvidede kort">
                 <div><span>Maksimal køretid</span><output id="map-time-output" for="map-time-slider"><?= (int) $config['slider']['default'] ?> minutter</output></div>
@@ -154,8 +157,14 @@ header('Pragma: no-cache');
             <section class="origin-control" aria-labelledby="origin-title">
                 <div class="origin-control-heading">
                     <p class="section-kicker" id="origin-title">Vælg udgangspunkt</p>
-                    <button id="compare-toggle" class="compare-toggle" type="button" aria-pressed="false" disabled>Sammenlign A/B</button>
+                    <div class="origin-control-actions">
+                        <button id="share-button" class="share-button" type="button" aria-label="Del den aktuelle kortvisning">
+                            <span class="share-icon" aria-hidden="true"></span><span>Del</span>
+                        </button>
+                        <button id="compare-toggle" class="compare-toggle" type="button" aria-pressed="false" disabled>Sammenlign A/B</button>
+                    </div>
                 </div>
+                <p id="share-status" class="share-status" role="status" aria-live="polite"></p>
                 <div class="primary-control">
                     <label class="origin-field" for="origin-primary">
                         <span>Udgangspunkt A</span>

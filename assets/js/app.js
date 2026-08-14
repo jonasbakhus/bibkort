@@ -18,6 +18,8 @@
     const initialMinutes = Number.isFinite(requestedMinutes)
         ? Math.min(config.slider.max, Math.max(config.slider.min, config.slider.min + Math.round((requestedMinutes - config.slider.min) / config.slider.step) * config.slider.step))
         : config.slider.default;
+    const initialMapView = readMapView(params);
+    let mapUrlTimer = null;
 
     const state = {
         minutes: initialMinutes,
@@ -92,6 +94,9 @@
         selectionPrompt: document.getElementById('selection-prompt'),
         singleOriginName: document.getElementById('single-origin-name'),
         mapSizeToggle: document.getElementById('map-size-toggle'),
+        shareButton: document.getElementById('share-button'),
+        mapShareButton: document.getElementById('map-share-button'),
+        shareStatus: document.getElementById('share-status'),
         heatmapToggle: document.getElementById('heatmap-toggle'),
         mapHeatmapToggle: document.getElementById('map-heatmap-toggle'),
         heatmapDescription: document.getElementById('heatmap-description'),
@@ -116,7 +121,7 @@
         fadeAnimation: false,
         zoomAnimation: false,
         markerZoomAnimation: false,
-    }).setView([56.25, 8.65], 8);
+    }).setView(initialMapView ? [initialMapView.lat, initialMapView.lng] : [56.25, 8.65], initialMapView?.zoom || 8);
     L.control.zoom({ position: 'topright' }).addTo(map);
     map.createPane('isochrone-primary');
     map.createPane('isochrone-secondary');
@@ -285,6 +290,7 @@
         state.boundaryTouchMarkers.set(origin.id, touchMarker);
     });
     map.on('zoomend', updateCityLabels);
+    map.on('moveend', scheduleMapUrlUpdate);
     updateCityLabels();
     map.on('popupopen', ({ popup }) => {
         popup.getElement()?.querySelectorAll('[data-select-origin]').forEach((button) => {
@@ -308,7 +314,7 @@
 
     if (state.scenarios.primary.origin) addOriginMarker(state.scenarios.primary);
     if (state.comparing && state.scenarios.secondary.origin) addOriginMarker(state.scenarios.secondary);
-    fitMapToOrigins();
+    if (!initialMapView) fitMapToOrigins();
 
     elements.slider.min = config.slider.min;
     elements.slider.max = config.slider.max;
@@ -325,6 +331,9 @@
     elements.mapPrimarySelect.addEventListener('change', () => selectOrigin('primary', elements.mapPrimarySelect.value));
     elements.mapSecondarySelect.addEventListener('change', () => selectOrigin('secondary', elements.mapSecondarySelect.value));
     elements.mapSizeToggle?.addEventListener('click', toggleMobileMap);
+    [elements.shareButton, elements.mapShareButton].filter(Boolean).forEach((button) => {
+        button.addEventListener('click', () => shareCurrentView(button));
+    });
     elements.heatmapToggle?.addEventListener('click', toggleHeatmap);
     elements.mapHeatmapToggle?.addEventListener('click', toggleHeatmap);
     elements.compareToggle.addEventListener('click', () => {
@@ -579,7 +588,7 @@
                 interactive: false,
                 style: { color: '#f2673a', weight: 3, opacity: 0.95, fill: false, dashArray: '9 6', lineCap: 'round' },
             }).addTo(map);
-            if (!state.scenarios.primary.origin) {
+            if (!state.scenarios.primary.origin && !initialMapView) {
                 map.fitBounds(state.municipalityLayer.getBounds().pad(0.1), { padding: [24, 24], maxZoom: 10 });
             }
         } catch (error) {
@@ -1658,7 +1667,73 @@
         if (state.heatmap.active) url.searchParams.set('view', 'heatmap');
         else url.searchParams.delete('view');
         url.searchParams.set('minutes', String(state.minutes));
+        const center = map.getCenter();
+        url.searchParams.set('lat', center.lat.toFixed(5));
+        url.searchParams.set('lng', center.lng.toFixed(5));
+        url.searchParams.set('zoom', String(map.getZoom()));
         window.history.replaceState({}, '', url);
+    }
+
+    function scheduleMapUrlUpdate() {
+        window.clearTimeout(mapUrlTimer);
+        mapUrlTimer = window.setTimeout(updateUrl, 140);
+    }
+
+    async function shareCurrentView(button) {
+        updateUrl();
+        const url = window.location.href;
+        const data = {
+            title: 'Joboplandskort for Lemvig Kommune',
+            text: 'Se denne visning i Joboplandskortet for Lemvig Kommune.',
+            url,
+        };
+        try {
+            if (typeof navigator.share === 'function') {
+                await navigator.share(data);
+                showShareFeedback(button, 'Delt');
+            } else {
+                await copyShareUrl(url);
+                showShareFeedback(button, 'Link kopieret');
+            }
+        } catch (error) {
+            if (error?.name === 'AbortError') return;
+            try {
+                await copyShareUrl(url);
+                showShareFeedback(button, 'Link kopieret');
+            } catch (copyError) {
+                showShareFeedback(button, 'Kunne ikke kopiere');
+            }
+        }
+    }
+
+    async function copyShareUrl(url) {
+        if (navigator.clipboard?.writeText && window.isSecureContext) {
+            await navigator.clipboard.writeText(url);
+            return;
+        }
+        const input = document.createElement('textarea');
+        input.value = url;
+        input.setAttribute('readonly', '');
+        input.style.position = 'fixed';
+        input.style.opacity = '0';
+        document.body.appendChild(input);
+        input.select();
+        const copied = document.execCommand('copy');
+        input.remove();
+        if (!copied) throw new Error('Kopiering blev afvist.');
+    }
+
+    let shareFeedbackTimer = null;
+    function showShareFeedback(button, message) {
+        const label = button?.querySelector('span:last-child');
+        const original = label?.textContent || 'Del';
+        if (label) label.textContent = message;
+        if (elements.shareStatus) elements.shareStatus.textContent = message === 'Delt' ? 'Visningen er delt.' : `${message}.`;
+        window.clearTimeout(shareFeedbackTimer);
+        shareFeedbackTimer = window.setTimeout(() => {
+            if (label) label.textContent = original;
+            if (elements.shareStatus) elements.shareStatus.textContent = '';
+        }, 2200);
     }
 
     function updateSliderProgress() {
@@ -1737,6 +1812,17 @@
 
     function clamp(value, min, max) {
         return Math.min(max, Math.max(min, value));
+    }
+
+    function readMapView(searchParams) {
+        if (!['lat', 'lng', 'zoom'].every((key) => searchParams.has(key) && searchParams.get(key)?.trim() !== '')) return null;
+        const lat = Number(searchParams.get('lat'));
+        const lng = Number(searchParams.get('lng'));
+        const zoom = Number(searchParams.get('zoom'));
+        if (!Number.isFinite(lat) || lat < -90 || lat > 90) return null;
+        if (!Number.isFinite(lng) || lng < -180 || lng > 180) return null;
+        if (!Number.isFinite(zoom) || zoom < 7 || zoom > 19) return null;
+        return { lat, lng, zoom: Math.round(zoom) };
     }
 
     function escapeHtml(value) {
