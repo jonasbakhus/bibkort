@@ -53,17 +53,9 @@ final class TravelTimeProvider
 
     public function matrix(array $origin, array $cities): array
     {
-        $routes = [];
-        // Store /time-filter/fast-kald kan skifte beregningsadfærd tæt på tjenestens
-        // praktiske lokationsgrænse. Behold derfor 50 destinationer pr. søgning, men saml
-        // op til de dokumenterede 10 søgninger i ét HTTP-kald. Det undgår at ramme
-        // kontoens request-rate, når en ny matrix endnu ikke findes i servercachen.
-        $cityBatches = array_chunk($cities, 50);
-        foreach (array_chunk($cityBatches, 10) as $searchGroup) {
-            $routes = array_merge($routes, $this->matrixBatchGroup($origin, $searchGroup));
-        }
-
-        return $routes;
+        // Kontoens rategrænse tæller søgninger. Fast-endpointet er netop beregnet til
+        // store one-to-many-matricer, så alle analysedestinationer sendes som én søgning.
+        return $this->matrixBatchGroup($origin, [$cities]);
     }
 
     /**
