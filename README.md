@@ -19,6 +19,7 @@ Appen er bygget til et almindeligt PHP-webhotel og kræver ingen database, Compo
 - forberegnet jobheatmap i et 500-meter net over hele Lemvig Kommune, uden API-kald ved almindelige besøg
 - officielle BY3-befolkningstal for byfordeling og kommunegrænser fra Dataforsyningen til landzoneoverlap
 - dynamisk rutematrix for officielle BY3-byer til og med den valgte tid plus 5 minutter; ved 90 minutter dækkes nærzonen derfor til 95 minutter
+- rutematricens 50-byers delberegninger samles i op til 10 søgninger pr. TravelTime-kald, så kolde caches ikke overskrider kontoens request-rate
 - synlig kilde-, årgangs- og formelforklaring for hver byandel i resultatlisterne
 - responsivt kort- og informationslayout
 - tydelig metodeforklaring om forskellen på køretidspolygon og kommunetal

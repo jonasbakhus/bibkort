@@ -55,9 +55,12 @@ final class TravelTimeProvider
     {
         $routes = [];
         // Store /time-filter/fast-kald kan skifte beregningsadfærd tæt på tjenestens
-        // praktiske lokationsgrænse. Mindre bidder giver stabile tider og bevarer rækkefølgen.
-        foreach (array_chunk($cities, 50) as $cityBatch) {
-            $routes = array_merge($routes, $this->matrixBatch($origin, $cityBatch));
+        // praktiske lokationsgrænse. Behold derfor 50 destinationer pr. søgning, men saml
+        // op til de dokumenterede 10 søgninger i ét HTTP-kald. Det undgår at ramme
+        // kontoens request-rate, når en ny matrix endnu ikke findes i servercachen.
+        $cityBatches = array_chunk($cities, 50);
+        foreach (array_chunk($cityBatches, 10) as $searchGroup) {
+            $routes = array_merge($routes, $this->matrixBatchGroup($origin, $searchGroup));
         }
 
         return $routes;
@@ -141,57 +144,80 @@ final class TravelTimeProvider
         return $matrix;
     }
 
-    private function matrixBatch(array $origin, array $cities): array
+    /**
+     * @param array<int, array<int, array<string, mixed>>> $cityBatches
+     * @return array<int, array<string, mixed>>
+     */
+    private function matrixBatchGroup(array $origin, array $cityBatches): array
     {
-        $destinationIds = [];
         $locations = [['id' => 'origin', 'coords' => $this->coords($origin)]];
-        foreach ($cities as $index => $city) {
-            $destinationId = 'destination-' . $index;
-            $destinationIds[] = $destinationId;
-            $locations[] = ['id' => $destinationId, 'coords' => $this->coords($city)];
+        $searches = [];
+        $definitions = [];
+        foreach ($cityBatches as $searchIndex => $cities) {
+            $searchId = 'matrix-' . $searchIndex;
+            $destinationIds = [];
+            foreach ($cities as $destinationIndex => $city) {
+                $destinationId = 'destination-' . $searchIndex . '-' . $destinationIndex;
+                $destinationIds[] = $destinationId;
+                $locations[] = ['id' => $destinationId, 'coords' => $this->coords($city)];
+            }
+            $searches[] = [
+                'id' => $searchId,
+                'departure_location_id' => 'origin',
+                'arrival_location_ids' => $destinationIds,
+                'transportation' => ['type' => 'driving'],
+                'travel_time' => 3 * 60 * 60,
+                'arrival_time_period' => 'weekday_morning',
+                'properties' => ['travel_time', 'distance'],
+            ];
+            $definitions[] = [
+                'searchId' => $searchId,
+                'cities' => $cities,
+                'destinationIds' => $destinationIds,
+            ];
         }
 
         $payload = [
             'locations' => $locations,
-            'arrival_searches' => [
-                'one_to_many' => [[
-                    'id' => 'matrix',
-                    'departure_location_id' => 'origin',
-                    'arrival_location_ids' => $destinationIds,
-                    'transportation' => ['type' => 'driving'],
-                    'travel_time' => 3 * 60 * 60,
-                    'arrival_time_period' => 'weekday_morning',
-                    'properties' => ['travel_time', 'distance'],
-                ]],
-            ],
+            'arrival_searches' => ['one_to_many' => $searches],
         ];
         $data = $this->request('/time-filter/fast', $payload);
         $results = $data['results'] ?? null;
-        if (!is_array($results) || !is_array($results[0]['locations'] ?? null)) {
+        if (!is_array($results)) {
             throw new RuntimeException('TravelTime returnerede ikke en gyldig køretidsmatrix.');
         }
 
-        $routesById = [];
-        foreach ($results[0]['locations'] as $route) {
-            if (is_array($route) && is_string($route['id'] ?? null)) {
-                $routesById[$route['id']] = $route['properties'] ?? [];
+        $resultsBySearch = [];
+        foreach ($results as $result) {
+            if (is_array($result) && is_string($result['search_id'] ?? null)) {
+                $resultsBySearch[$result['search_id']] = $result;
             }
         }
 
-        return array_map(
-            function (array $city, string $destinationId) use ($routesById): array {
-                $properties = $routesById[$destinationId] ?? [];
-
-                return array_merge($city, [
+        $routes = [];
+        foreach ($definitions as $definition) {
+            $result = $resultsBySearch[$definition['searchId']] ?? null;
+            if (!is_array($result) || !is_array($result['locations'] ?? null)) {
+                throw new RuntimeException('TravelTime returnerede ikke en komplet køretidsmatrix.');
+            }
+            $routesById = [];
+            foreach ($result['locations'] as $route) {
+                if (is_array($route) && is_string($route['id'] ?? null)) {
+                    $routesById[$route['id']] = $route['properties'] ?? [];
+                }
+            }
+            foreach ($definition['cities'] as $index => $city) {
+                $properties = $routesById[$definition['destinationIds'][$index]] ?? [];
+                $routes[] = array_merge($city, [
                     'travelSeconds' => isset($properties['travel_time'])
                         ? $this->calibratedSeconds((float) $properties['travel_time'])
                         : null,
                     'distanceKm' => isset($properties['distance']) ? round((float) $properties['distance'] / 1000, 1) : null,
                 ]);
-            },
-            $cities,
-            $destinationIds
-        );
+            }
+        }
+
+        return $routes;
     }
 
     private function coords(array $location): array
@@ -215,8 +241,21 @@ final class TravelTimeProvider
             'X-Application-Id: ' . $this->appId,
             'X-Api-Key: ' . $this->apiKey,
         ];
-        $body = app_http_post_json($this->baseUrl . $path, $payload, array_merge($authHeaders, $headers), 60);
+        $attempts = 3;
+        for ($attempt = 1; $attempt <= $attempts; $attempt++) {
+            try {
+                $body = app_http_post_json($this->baseUrl . $path, $payload, array_merge($authHeaders, $headers), 60);
 
-        return app_json_decode($body, 'TravelTime');
+                return app_json_decode($body, 'TravelTime');
+            } catch (RuntimeException $exception) {
+                $retryable = preg_match('/HTTP (429|5\d\d)\b/', $exception->getMessage()) === 1;
+                if (!$retryable || $attempt === $attempts) {
+                    throw $exception;
+                }
+                usleep($attempt * 1000000);
+            }
+        }
+
+        throw new RuntimeException('TravelTime kunne ikke kontaktes.');
     }
 }
